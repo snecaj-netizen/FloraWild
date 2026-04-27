@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Plant": {
+      "title": "Plant",
+      "description": "A saved plant identification with details and user association.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Common name of the plant or mushroom" },
+        "category": { "type": "string", "enum": ["plant", "mushroom"], "description": "Category: plant or mushroom" },
+        "scientificName": { "type": "string", "description": "Scientific name" },
+        "isEdible": { "type": "boolean", "description": "Whether the plant is edible" },
+        "edibilityDetails": { "type": "string", "description": "Details about edibility" },
+        "culinaryUses": { "type": "array", "items": { "type": "string" }, "description": "List of culinary uses" },
+        "phytotherapyUses": { "type": "array", "items": { "type": "string" }, "description": "List of phytotherapy uses" },
+        "description": { "type": "string", "description": "Botanical description" },
+        "warning": { "type": "string", "description": "Safety warnings" },
+        "imageUrl": { "type": "string", "description": "URL of the plant image" },
+        "createdAt": { "type": "number", "description": "Timestamp of creation" },
+        "userId": { "type": "string", "description": "UID of the owner" }
+      },
+      "required": ["name", "scientificName", "isEdible", "imageUrl", "createdAt", "userId"]
+    },
+    "SavedSearch": {
+      "title": "SavedSearch",
+      "description": "A saved search result from the explore section.",
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "The search query" },
+        "category": { "type": "string", "enum": ["plant", "mushroom"], "description": "Category search performed" },
+        "result": { "type": "string", "description": "The markdown result from Gemini" },
+        "imageUrl": { "type": "string", "description": "URL of the representative image" },
+        "createdAt": { "type": "number", "description": "Creation timestamp" },
+        "userId": { "type": "string", "description": "UID of the user" }
+      },
+      "required": ["query", "result", "createdAt", "userId"]
+    }
+  },
+  "firestore": {
+    "/plants/{plantId}": {
+      "schema": "Plant",
+      "description": "Collection of saved plants"
+    },
+    "/saved_searches/{searchId}": {
+      "schema": "SavedSearch",
+      "description": "Collection of saved search results"
+    }
+  }
+}

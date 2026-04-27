@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: plants
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - scientificName: string (required, 1-100 chars)
+    //   - isEdible: bool (required)
+    //   - edibilityDetails: string (optional, < 2000 chars)
+    //   - culinaryUses: list of strings (optional, < 50 items)
+    //   - phytotherapyUses: list of strings (optional, < 50 items)
+    //   - description: string (optional, < 2000 chars)
+    //   - warning: string (optional, < 1000 chars)
+    //   - imageUrl: string (required, valid URL)
+    //   - createdAt: number (required, timestamp)
+    //   - userId: string (required, matches auth.uid)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidPlant(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.category in ['plant', 'mushroom'] &&
+             data.scientificName is string && data.scientificName.size() >= 1 && data.scientificName.size() <= 100 &&
+             data.isEdible is bool &&
+             data.imageUrl is string && data.imageUrl.size() < 1048576 &&
+             data.createdAt is number &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidSearch(data) {
+      return data.query is string && data.query.size() >= 1 && data.query.size() <= 500 &&
+             data.category in ['plant', 'mushroom'] &&
+             data.result is string && data.result.size() >= 1 && data.result.size() <= 1048576 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1048576)) &&
+             data.createdAt is number &&
+             data.userId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /plants/{plantId} {
+      // Users can only read their own saved plants
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // Users can create plants for themselves
+      allow create: if isAuthenticated() && isValidPlant(request.resource.data);
+      
+      // Users can delete their own plants
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // Updates are not typically needed for this app, but let's allow owner-only updates with validation
+      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isValidPlant(request.resource.data);
+    }
+
+    match /saved_searches/{searchId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidSearch(request.resource.data);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
