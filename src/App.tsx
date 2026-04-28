@@ -16,7 +16,14 @@ import {
   orderBy,
   getDocFromServer
 } from 'firebase/firestore';
-import { auth, db, signInWithGoogle, logout } from './firebase';
+import { 
+  auth, 
+  db, 
+  signIn, 
+  signUp, 
+  logout, 
+  getUserRole 
+} from './firebase';
 import { Layout } from './components/Layout';
 import { Navbar } from './components/Navbar';
 import { Home } from './components/Home';
@@ -24,11 +31,12 @@ import { CameraView } from './components/CameraView';
 import { Collection } from './components/Collection';
 import { Search } from './components/Search';
 import { PlantDetails } from './components/PlantDetails';
+import { AdminPanel } from './components/AdminPanel';
 import { ConfirmModal } from './components/ConfirmModal';
 import { Plant, View, OperationType, SavedSearch } from './types';
 import { identifyPlant, PlantIdentification } from './services/geminiService';
 import { compressImage } from './lib/imageUtils';
-import { Loader2, LogIn, Leaf } from 'lucide-react';
+import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const safeStorage = {
@@ -70,7 +78,16 @@ const IdentificationStatus = ({ isIdentifying, category }: { isIdentifying: bool
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  
+  // Login form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [currentView, setCurrentView] = useState<View>(() => {
     const saved = safeStorage.getItem('flora_view');
     const validViews: View[] = ['home', 'camera', 'collection', 'search', 'details'];
@@ -159,8 +176,15 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUser(user);
+        const role = await getUserRole(user.uid, user.email);
+        setIsAdmin(role === 'admin');
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
       setIsAuthReady(true);
     });
     return () => unsubscribe();
@@ -316,11 +340,36 @@ export default function App() {
     }
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
     try {
-      await signInWithGoogle();
-    } catch (error) {
-      console.error("Login failed:", error);
+      if (isSigningUp) {
+        await signUp(email, password);
+      } else {
+        await signIn(email, password);
+      }
+    } catch (error: any) {
+      let message = "Operazione fallita. Riprova.";
+      console.error("Auth error code:", error.code);
+      
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        message = "Credenziali non valide. Per il primo accesso usa 'Registrati' con almeno 6 caratteri (es. Admin123).";
+      } else if (error.code === 'auth/user-not-found') {
+        message = "Utente non trovato. Usa 'Registrati' con una password di almeno 6 caratteri (es. Admin123).";
+      } else if (error.code === 'auth/email-already-in-use') {
+        message = "Email già registrata. Se non ricordi la password, riprova con 'Registrati' usando un'altra email o contatta l'assistenza.";
+      } else if (error.code === 'auth/weak-password') {
+        message = "La password deve avere almeno 6 caratteri (es. Admin123).";
+      } else if (error.code === 'auth/invalid-email') {
+        message = "Formato email non valido.";
+      } else if (error.code === 'auth/operation-not-allowed') {
+        message = "L'accesso con Email/Password non è abilitato nella console Firebase.";
+      }
+      setAuthError(message);
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -343,21 +392,96 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center nature-gradient p-6 text-center">
-        <div className="w-24 h-24 bg-nature-600 rounded-3xl flex items-center justify-center mb-8 shadow-xl">
-          <Leaf className="text-white" size={48} />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="bg-nature-600 p-8 text-white text-center">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Leaf size={32} />
+            </div>
+            <h1 className="text-3xl font-serif font-bold">FloraWild</h1>
+            <p className="text-white/80 mt-2 italic">Il tuo compagno nella natura</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="p-8 space-y-6">
+            <h2 className="text-2xl font-bold text-slate-900 text-center">
+              {isSigningUp ? 'Crea un account' : 'Bentornato'}
+            </h2>
+
+            {authError && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                <p className="text-sm font-medium">{authError}</p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700 ml-1">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-12 pr-4 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
+                    placeholder="esempio@Email.com"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700 ml-1">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-12 pr-12 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isAuthLoading}
+              className="w-full bg-nature-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-nature-100 hover:bg-nature-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+            >
+              {isAuthLoading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>
+                  <LogIn size={20} />
+                  {isSigningUp ? 'Registrati' : 'Accedi'}
+                </>
+              )}
+            </button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSigningUp(!isSigningUp);
+                  setAuthError(null);
+                }}
+                className="text-nature-600 font-bold hover:underline"
+              >
+                {isSigningUp ? 'Hai già un account? Accedi' : 'Non hai un account? Registrati'}
+              </button>
+            </div>
+          </form>
         </div>
-        <h1 className="text-4xl font-serif font-bold mb-4">FloraWild</h1>
-        <p className="text-nature-600 mb-12 max-w-xs italic">
-          Accedi per iniziare a identificare e collezionare le meraviglie della natura.
-        </p>
-        <button
-          onClick={handleLogin}
-          className="flex items-center gap-3 bg-white text-nature-900 px-8 py-4 rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all active:scale-95 border border-brand-100"
-        >
-          <LogIn size={24} />
-          Accedi con Google
-        </button>
       </div>
     );
   }
@@ -365,6 +489,10 @@ export default function App() {
   return (
     <Layout>
       <div className="relative">
+          {currentView === 'admin' && isAdmin && (
+            <AdminPanel onBack={() => setCurrentView('home')} />
+          )}
+
           {currentView === 'home' && (
             <Home 
               onStartIdentify={() => setCurrentView('camera')}
@@ -477,12 +605,22 @@ export default function App() {
         />
 
         {currentView === 'home' && (
-          <button 
-            onClick={() => setShowLogoutConfirm(true)}
-            className="fixed top-4 right-4 p-2 bg-white/50 backdrop-blur-sm rounded-full text-nature-400 hover:text-nature-600 transition-all z-40"
-          >
-            <LogIn size={18} className="rotate-180" />
-          </button>
+          <div className="fixed top-4 right-4 flex gap-2 z-40">
+            {isAdmin && (
+              <button 
+                onClick={() => setCurrentView('admin')}
+                className="p-2 bg-white/50 backdrop-blur-sm rounded-full text-brand-600 hover:text-brand-800 transition-all border border-brand-100"
+              >
+                <Shield size={18} />
+              </button>
+            )}
+            <button 
+              onClick={() => setShowLogoutConfirm(true)}
+              className="p-2 bg-white/50 backdrop-blur-sm rounded-full text-nature-400 hover:text-nature-600 transition-all border border-brand-100"
+            >
+              <LogIn size={18} className="rotate-180" />
+            </button>
+          </div>
         )}
       </Layout>
   );

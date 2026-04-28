@@ -1,37 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: plants
-    // Document ID: auto-generated
-    // Fields:
-    //   - name: string (required, 1-100 chars)
-    //   - scientificName: string (required, 1-100 chars)
-    //   - isEdible: bool (required)
-    //   - edibilityDetails: string (optional, < 2000 chars)
-    //   - culinaryUses: list of strings (optional, < 50 items)
-    //   - phytotherapyUses: list of strings (optional, < 50 items)
-    //   - description: string (optional, < 2000 chars)
-    //   - warning: string (optional, < 1000 chars)
-    //   - imageUrl: string (required, valid URL)
-    //   - createdAt: number (required, timestamp)
-    //   - userId: string (required, matches auth.uid)
-    //
-    // ===============================================================
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
-    // Helper Functions
+    // Primitives
     // ===============================================================
-    
-    function isAuthenticated() {
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+              request.auth.token.email == 'snecaj@gmail.com');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // ===============================================================
+    // Validation Blueprints
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.email is string && data.email.size() >= 5 && data.email.size() <= 200 &&
+             data.role in ['admin', 'user'] &&
+             (data.createdAt is timestamp || data.createdAt is number); // Match what setDoc/serverTimestamp sends
     }
 
     function isValidPlant(data) {
@@ -54,32 +71,52 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Rules
+    // Collection Rules
     // ===============================================================
 
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      allow create: if isOwner(userId) && 
+                       isValidUser(incoming()) && 
+                       incoming().role == 'user' && // Self-assigned admin blocked
+                       incoming().keys().hasAll(['email', 'role', 'createdAt']) &&
+                       incoming().keys().size() == 3;
+      
+      allow update: if (isAdmin() && isValidUser(incoming())) || (
+        isOwner(userId) && 
+        isValidUser(incoming()) && 
+        incoming().role == existing().role && // Role cannot be changed by user
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'createdAt']) // Only specified fields
+      );
+
+      allow delete: if isAdmin();
+    }
+
     match /plants/{plantId} {
-      // Users can only read their own saved plants
-      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow get: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       
-      // Users can create plants for themselves
-      allow create: if isAuthenticated() && isValidPlant(request.resource.data);
+      allow create: if isSignedIn() && isValidPlant(incoming());
       
-      // Users can delete their own plants
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
-      
-      // Updates are not typically needed for this app, but let's allow owner-only updates with validation
-      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isValidPlant(request.resource.data);
+      allow update: if isSignedIn() && 
+                       (isOwner(existing().userId) || isAdmin()) && 
+                       isValidPlant(incoming()) &&
+                       incoming().userId == existing().userId; // Immutable owner
+
+      allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
     }
 
     match /saved_searches/{searchId} {
-      allow read: if isAuthenticated() && isOwner(resource.data.userId);
-      allow create: if isAuthenticated() && isValidSearch(request.resource.data);
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
-    }
-
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
+      allow get: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() && isValidSearch(incoming());
+      
+      allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      
+      allow update: if false; // Searches are usually immutable in this app
     }
   }
 }
