@@ -1,16 +1,19 @@
 import React from 'react';
 import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight } from 'lucide-react';
-import { SavedSearch } from '../types';
+import { SavedSearch, Plant } from '../types';
 
 interface HomeProps {
   onStartIdentify: () => void;
   onGoToCollection: () => void;
   onGoToSearch: (initialQuery?: string) => void;
+  onSelectPlant: (plant: Plant) => void;
   savedSearches?: SavedSearch[];
+  recentPlants?: Plant[];
 }
 
-export function Home({ onStartIdentify, onGoToCollection, onGoToSearch, savedSearches = [] }: HomeProps) {
+export function Home({ onStartIdentify, onGoToCollection, onGoToSearch, onSelectPlant, savedSearches = [], recentPlants = [] }: HomeProps) {
   const recentSearches = savedSearches.slice(0, 3);
+  const displayPlants = recentPlants.slice(0, 3);
 
   return (
     <div className="space-y-10 pb-10">
@@ -18,7 +21,7 @@ export function Home({ onStartIdentify, onGoToCollection, onGoToSearch, savedSea
         <div
           className="w-20 h-20 bg-nature-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-nature-200"
         >
-          <Leaf className="text-white" size={40} />
+          <Sprout className="text-white" size={40} />
         </div>
         <div className="space-y-1">
           <h1 className="text-5xl font-serif font-bold text-nature-900">FloraWild</h1>
@@ -56,56 +59,99 @@ export function Home({ onStartIdentify, onGoToCollection, onGoToSearch, savedSea
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between px-2">
-          <h3 className="text-sm font-bold text-nature-400 uppercase tracking-widest flex items-center gap-2">
-            <Clock size={16} />
-            Ricerche Recenti
-          </h3>
-          {recentSearches.length > 0 && (
-            <button 
-              onClick={() => onGoToSearch()}
-              className="text-xs font-bold text-brand-600 hover:text-brand-700"
-            >
-              Vedi tutte
-            </button>
-          )}
-        </div>
-        
-        {recentSearches.length > 0 ? (
-          <div className="space-y-3">
-            {recentSearches.map((saved) => (
-              <button
-                key={saved.id}
-                onClick={() => onGoToSearch(saved.query)}
-                className="w-full p-3 bg-white rounded-2xl border border-nature-100 shadow-sm flex items-center justify-between group hover:bg-nature-50 transition-all"
+      {/* Recenti Section */}
+      <section className="space-y-6">
+        {displayPlants.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-2">
+              <h3 className="text-sm font-bold text-nature-400 uppercase tracking-widest flex items-center gap-2">
+                <Sprout size={16} />
+                Ultime Scoperte
+              </h3>
+              <button 
+                onClick={onGoToCollection}
+                className="text-xs font-bold text-brand-600 hover:text-brand-700"
               >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-nature-100 bg-nature-50">
-                    {saved.imageUrl ? (
-                      <img 
-                        src={saved.imageUrl} 
-                        alt={saved.query} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-nature-300">
-                        <Search size={20} />
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-nature-800 font-medium truncate pr-2">{saved.query}</span>
-                </div>
-                <ChevronRight className="text-nature-300 group-hover:text-nature-500 transition-colors shrink-0" size={18} />
+                Vedi collezione
               </button>
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 border-2 border-dashed border-nature-100 rounded-[2rem] text-center">
-            <p className="text-sm text-nature-400 italic">Le tue ricerche salvate appariranno qui.</p>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-3">
+              {displayPlants.map((plant) => (
+                <button
+                  key={plant.id}
+                  onClick={() => onSelectPlant(plant)}
+                  className="flex flex-col gap-2 text-left group"
+                >
+                  <div className="aspect-square rounded-2xl overflow-hidden border border-nature-100 shadow-sm group-hover:shadow-md transition-all">
+                    <img 
+                      src={plant.imageUrl} 
+                      alt={plant.name} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold text-nature-900 truncate leading-tight">{plant.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-sm font-bold text-nature-400 uppercase tracking-widest flex items-center gap-2">
+              <Clock size={16} />
+              Collezione Ricerche
+            </h3>
+            {recentSearches.length > 0 && (
+              <button 
+                onClick={() => onGoToSearch()}
+                className="text-xs font-bold text-brand-600 hover:text-brand-700"
+              >
+                Vedi tutte
+              </button>
+            )}
+          </div>
+          
+          {recentSearches.length > 0 ? (
+            <div className="space-y-3">
+              {recentSearches.map((saved) => (
+                <button
+                  key={saved.id}
+                  onClick={() => onGoToSearch(saved.query)}
+                  className="w-full p-3 bg-white rounded-2xl border border-nature-100 shadow-sm flex items-center justify-between group hover:bg-nature-50 transition-all text-left"
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-nature-100 bg-nature-50">
+                      {saved.imageUrl ? (
+                        <img 
+                          src={saved.imageUrl} 
+                          alt={saved.query} 
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-nature-300">
+                          <Search size={20} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-nature-800 font-bold truncate pr-2">{saved.query}</span>
+                      <span className="text-[10px] text-nature-400 uppercase font-bold tracking-tight">Rileggi analisi salvata</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="text-nature-300 group-hover:text-nature-500 transition-colors shrink-0" size={18} />
+                </button>
+              ))}
+            </div>
+          ) : !displayPlants.length && (
+            <div className="p-6 border-2 border-dashed border-nature-100 rounded-[2rem] text-center">
+              <p className="text-sm text-nature-400 italic">Le tue ricerche salvate appariranno qui.</p>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="glass-card p-8 rounded-[2rem] space-y-4 relative overflow-hidden">

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2 } from 'lucide-react';
+import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X } from 'lucide-react';
 import { PlantIdentification } from '@/src/services/geminiService';
 import { cn } from '@/src/lib/utils';
 import * as htmlToImage from 'html-to-image';
@@ -134,8 +134,16 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="space-y-6"
+      className="space-y-6 relative"
     >
+      {/* Absolute Close Button for Popup feel */}
+      <button 
+        onClick={onBack}
+        className="fixed top-4 right-4 z-50 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-nature-100 text-nature-600 hover:text-nature-900 transition-all active:scale-95"
+      >
+        <X size={24} />
+      </button>
+
       {/* Hidden Card for Image Generation */}
       <div className="fixed -left-[9999px] top-0">
         <div 

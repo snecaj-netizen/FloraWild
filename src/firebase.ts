@@ -5,6 +5,8 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  updatePassword,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -52,6 +54,24 @@ export const signUp = async (email: string, password: string) => {
 export const logout = async () => {
   try {
     await signOut(auth);
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const resetPassword = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const changePassword = async (password: string) => {
+  try {
+    if (auth.currentUser) {
+      await updatePassword(auth.currentUser, password);
+    }
   } catch (error) {
     throw error;
   }

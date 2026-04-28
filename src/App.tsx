@@ -22,7 +22,9 @@ import {
   signIn, 
   signUp, 
   logout, 
-  getUserRole 
+  getUserRole,
+  resetPassword,
+  changePassword 
 } from './firebase';
 import { Layout } from './components/Layout';
 import { Navbar } from './components/Navbar';
@@ -36,7 +38,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { Plant, View, OperationType, SavedSearch } from './types';
 import { identifyPlant, PlantIdentification } from './services/geminiService';
 import { compressImage } from './lib/imageUtils';
-import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff, Edit2, ChevronRight, Check, Sprout } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const safeStorage = {
@@ -126,12 +128,17 @@ export default function App() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [searchInitialQuery, setSearchInitialQuery] = useState<string | undefined>(undefined);
+  const [previousView, setPreviousView] = useState<View>('home');
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   // Persistence effects
   useEffect(() => {
     // Safety check: if in details view but missing data, go home
     if (currentView === 'details' && (!identifiedPlant || !capturedImage) && !isIdentifying) {
       setCurrentView('home');
+    }
+    if (currentView !== 'details') {
+      setPreviousView(currentView);
     }
     safeStorage.setItem('flora_view', currentView);
   }, [currentView, identifiedPlant, capturedImage, isIdentifying]);
@@ -396,7 +403,7 @@ export default function App() {
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
           <div className="bg-nature-600 p-8 text-white text-center">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Leaf size={32} />
+              <Sprout size={32} />
             </div>
             <h1 className="text-3xl font-serif font-bold">FloraWild</h1>
             <p className="text-white/80 mt-2 italic">Il tuo compagno nella natura</p>
@@ -494,15 +501,110 @@ export default function App() {
           )}
 
           {currentView === 'home' && (
-            <Home 
-              onStartIdentify={() => setCurrentView('camera')}
-              onGoToCollection={() => setCurrentView('collection')}
-              onGoToSearch={(query) => {
-                setSearchInitialQuery(query);
-                setCurrentView('search');
-              }}
-              savedSearches={savedSearches}
-            />
+            <div className="space-y-6">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <div className="flex gap-2">
+                  {isAdmin && (
+                    <button 
+                      onClick={() => setCurrentView('admin')}
+                      className="p-3 bg-nature-100 rounded-2xl text-nature-600 hover:bg-nature-200 transition-all flex items-center gap-2 text-xs font-bold"
+                    >
+                      <Shield size={18} />
+                      Admin
+                    </button>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all flex items-center gap-2 text-xs font-bold"
+                >
+                  Esci
+                  <LogIn size={18} className="rotate-180" />
+                </button>
+              </div>
+
+              {resetMessage && (
+                <div className="bg-green-50 text-green-700 p-4 rounded-2xl flex items-center gap-3 animate-slide-up border border-green-100">
+                  <Check className="shrink-0" size={20} />
+                  <p className="text-sm font-medium">{resetMessage}</p>
+                </div>
+              )}
+              <Home 
+                onStartIdentify={() => setCurrentView('camera')}
+                onGoToCollection={() => setCurrentView('collection')}
+                onGoToSearch={(query) => {
+                  setSearchInitialQuery(query);
+                  setCurrentView('search');
+                }}
+                onSelectPlant={(plant) => {
+                  setIdentifiedPlant(plant);
+                  setCapturedImage(plant.imageUrl);
+                  setIsSaved(true);
+                  setCurrentView('details');
+                }}
+                savedSearches={savedSearches}
+                recentPlants={plants}
+              />
+              <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Sicurezza Account</h4>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={async () => {
+                      if (user?.email) {
+                        try {
+                          await resetPassword(user.email);
+                          setResetMessage("Email di reset inviata correttamente!");
+                          setTimeout(() => setResetMessage(null), 5000);
+                        } catch (err: any) {
+                          alert(err.message);
+                        }
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-slate-100 rounded-xl text-slate-500 group-hover:text-brand-500 transition-colors">
+                        <Lock size={20} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-slate-900">Resetta Password</p>
+                        <p className="text-[10px] text-slate-500">Riceverai un link via email</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300" />
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      const newPass = window.prompt("Inserisci la nuova password:");
+                      if (newPass && newPass.length >= 6) {
+                        try {
+                          await changePassword(newPass);
+                          setResetMessage("Password aggiornata con successo!");
+                          setTimeout(() => setResetMessage(null), 5000);
+                        } catch (err: any) {
+                          alert(err.message);
+                        }
+                      } else if (newPass) {
+                        alert("La password deve essere di almeno 6 caratteri.");
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-slate-100 rounded-xl text-slate-500 group-hover:text-brand-500 transition-colors">
+                        <Edit2 size={20} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-slate-900">Cambia Password</p>
+                        <p className="text-[10px] text-slate-500">Imposta una nuova password subito</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300" />
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {currentView === 'camera' && (
@@ -532,6 +634,8 @@ export default function App() {
               user={user}
               onFirestoreError={handleFirestoreError}
               initialQuery={searchInitialQuery} 
+              onBack={() => setCurrentView('home')}
+              savedSearches={savedSearches}
             />
           )}
 
@@ -550,7 +654,7 @@ export default function App() {
                   onBack={() => {
                     setIdentifiedPlant(null);
                     setCapturedImage(null);
-                    setCurrentView(isSaved ? 'collection' : 'home');
+                    setCurrentView(previousView);
                   }}
                   onRedo={() => setCurrentView('camera')}
                   onRefine={handleRefine}
@@ -603,25 +707,6 @@ export default function App() {
           confirmText="Esci ora"
           variant="primary"
         />
-
-        {currentView === 'home' && (
-          <div className="fixed top-4 right-4 flex gap-2 z-40">
-            {isAdmin && (
-              <button 
-                onClick={() => setCurrentView('admin')}
-                className="p-2 bg-white/50 backdrop-blur-sm rounded-full text-brand-600 hover:text-brand-800 transition-all border border-brand-100"
-              >
-                <Shield size={18} />
-              </button>
-            )}
-            <button 
-              onClick={() => setShowLogoutConfirm(true)}
-              className="p-2 bg-white/50 backdrop-blur-sm rounded-full text-nature-400 hover:text-nature-600 transition-all border border-brand-100"
-            >
-              <LogIn size={18} className="rotate-180" />
-            </button>
-          </div>
-        )}
       </Layout>
   );
 }

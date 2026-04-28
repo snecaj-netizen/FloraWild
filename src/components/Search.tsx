@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2 } from 'lucide-react';
+import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { User } from 'firebase/auth';
@@ -14,11 +14,13 @@ interface SearchProps {
   user: User | null;
   onFirestoreError: (error: any, operationType: OperationType, path: string | null) => void;
   initialQuery?: string;
+  onBack?: () => void;
+  savedSearches: SavedSearch[];
 }
 
 const OFFLINE_CACHE_KEY = 'flora_search_cache';
 
-export function Search({ user, onFirestoreError, initialQuery }: SearchProps) {
+export function Search({ user, onFirestoreError, initialQuery, onBack, savedSearches }: SearchProps) {
   const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom'>('plant');
   const [searchQuery, setSearchQuery] = useState(initialQuery || '');
   const [result, setResult] = useState<string | null>(null);
@@ -28,54 +30,8 @@ export function Search({ user, onFirestoreError, initialQuery }: SearchProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [activeSavedSearch, setActiveSavedSearch] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Load saved searches and handle offline cache
-  useEffect(() => {
-    if (!user) {
-      setSavedSearches([]);
-      return;
-    }
-
-    const path = 'saved_searches';
-    const q = query(
-      collection(db, path),
-      where('userId', '==', user.uid)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as SavedSearch[];
-      
-      const sorted = docs.sort((a, b) => b.createdAt - a.createdAt);
-      setSavedSearches(sorted);
-      
-      // Update local cache for offline reading
-      try {
-        localStorage.setItem(`${OFFLINE_CACHE_KEY}_${user.uid}`, JSON.stringify(sorted));
-      } catch (e) {
-        console.warn("Failed to update local cache:", e);
-      }
-    }, (error) => {
-      // If offline or error, try to load from local cache
-      const cached = localStorage.getItem(`${OFFLINE_CACHE_KEY}_${user.uid}`);
-      if (cached) {
-        try {
-          setSavedSearches(JSON.parse(cached));
-        } catch (e) {
-          onFirestoreError(error, OperationType.LIST, path);
-        }
-      } else {
-        onFirestoreError(error, OperationType.LIST, path);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [user]);
 
   const performSearch = async (queryText: string) => {
     if (!queryText.trim()) return;
@@ -173,11 +129,19 @@ export function Search({ user, onFirestoreError, initialQuery }: SearchProps) {
   };
 
   useEffect(() => {
-    if (initialQuery) {
+    if (initialQuery && savedSearches.length > 0) {
+      const saved = savedSearches.find(s => s.query.toLowerCase() === initialQuery.toLowerCase());
+      if (saved) {
+        loadSavedSearch(saved);
+      } else {
+        setSearchQuery(initialQuery);
+        performSearch(initialQuery);
+      }
+    } else if (initialQuery) {
       setSearchQuery(initialQuery);
       performSearch(initialQuery);
     }
-  }, [initialQuery]);
+  }, [initialQuery, savedSearches.length > 0]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,10 +226,20 @@ export function Search({ user, onFirestoreError, initialQuery }: SearchProps) {
   };
 
   return (
-    <div className="space-y-8 pb-10">
-      <header>
-        <h1 className="text-4xl font-serif mb-2">Esplora</h1>
-        <p className="text-nature-500">Cerca piante, funghi, ricette o rimedi naturali.</p>
+    <div className="space-y-8 pb-10 relative">
+      <header className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-serif mb-2">Esplora</h1>
+          <p className="text-nature-500">Cerca piante, funghi, ricette o rimedi naturali.</p>
+        </div>
+        {onBack && (
+          <button 
+            onClick={onBack}
+            className="p-4 bg-white rounded-2xl border border-nature-100 shadow-sm text-nature-600 hover:text-nature-900 transition-all active:scale-95 shrink-0"
+          >
+            <X size={24} />
+          </button>
+        )}
       </header>
 
       <div className="flex p-1 bg-nature-100 rounded-2xl w-full max-w-sm">

@@ -9,7 +9,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Shield, User, Trash2, Mail, Calendar, ArrowLeft } from 'lucide-react';
+import { Shield, User, Trash2, Mail, Calendar, ArrowLeft, Edit2, Check, X } from 'lucide-react';
 import { handleFirestoreError } from '../lib/utils';
 import { OperationType } from '../types';
 
@@ -23,6 +23,9 @@ interface UserProfile {
 export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
@@ -40,16 +43,23 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
     return () => unsubscribe();
   }, []);
 
-  const toggleRole = async (user: UserProfile) => {
-    const newRole = user.role === 'admin' ? 'user' : 'admin';
-    const path = `users/${user.id}`;
+  const handleUpdateUser = async (userId: string) => {
+    const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', user.id), {
-        role: newRole
+      await updateDoc(doc(db, 'users', userId), {
+        email: editEmail,
+        role: editRole
       });
+      setEditingUserId(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
+  };
+
+  const startEditing = (user: UserProfile) => {
+    setEditingUserId(user.id);
+    setEditEmail(user.email);
+    setEditRole(user.role);
   };
 
   const deleteUser = async (userId: string) => {
@@ -102,49 +112,85 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                 key={user.id}
                 className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
-                <div className="flex items-center gap-4 min-w-0">
+                <div className="flex items-center gap-4 min-w-0 flex-1">
                   <div className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${
                     user.role === 'admin' ? 'bg-brand-100 text-brand-600' : 'bg-slate-100 text-slate-400'
                   }`}>
                     {user.role === 'admin' ? <Shield size={24} /> : <User size={24} />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 font-bold text-slate-900 overflow-hidden">
-                      <span className="truncate block" title={user.email}>{user.email}</span>
-                      {user.role === 'admin' && (
-                        <span className="shrink-0 text-[10px] bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          Admin
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Mail size={12} className="shrink-0" /> <span className="truncate opacity-75">{user.id.substring(0, 8)}...</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar size={12} className="shrink-0" /> {user.createdAt?.seconds ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'Recent'}
-                      </span>
-                    </div>
+                    {editingUserId === user.id ? (
+                      <div className="space-y-2">
+                        <input 
+                          type="email" 
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                          className="w-full text-sm font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                        <select 
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
+                          className="text-[10px] uppercase tracking-wider font-bold bg-brand-50 text-brand-700 px-2 py-1 rounded-full border-none outline-none"
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 font-bold text-slate-900 overflow-hidden">
+                          <span className="truncate block" title={user.email}>{user.email}</span>
+                          {user.role === 'admin' && (
+                            <span className="shrink-0 text-[10px] bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              Admin
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                          <span className="flex items-center gap-1">
+                            <Mail size={12} className="shrink-0" /> <span className="truncate opacity-75">{user.id.substring(0, 8)}...</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar size={12} className="shrink-0" /> {user.createdAt?.seconds ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'Recent'}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-3 border-t sm:border-t-0 pt-4 sm:pt-0">
-                  <button
-                    onClick={() => toggleRole(user)}
-                    className={`flex-1 sm:flex-initial h-11 sm:h-auto px-4 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
-                      user.role === 'admin' 
-                        ? 'text-slate-600 hover:bg-slate-100 bg-slate-100/50' 
-                        : 'text-brand-600 hover:bg-brand-50 bg-brand-50/50'
-                    }`}
-                  >
-                    {user.role === 'admin' ? 'Rendi Utente' : 'Rendi Admin'}
-                  </button>
-                  <button
-                    onClick={() => deleteUser(user.id)}
-                    className="h-11 w-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors bg-slate-100/50 sm:bg-transparent shrink-0"
-                  >
-                    <Trash2 size={20} />
-                  </button>
+                  {editingUserId === user.id ? (
+                    <>
+                      <button
+                        onClick={() => handleUpdateUser(user.id)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-xl transition-colors shrink-0"
+                      >
+                        <Check size={20} />
+                      </button>
+                      <button
+                        onClick={() => setEditingUserId(null)}
+                        className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
+                      >
+                        <X size={20} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEditing(user)}
+                        className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-colors shrink-0"
+                      >
+                        <Edit2 size={20} />
+                      </button>
+                      <button
+                        onClick={() => deleteUser(user.id)}
+                        className="h-11 w-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors bg-slate-100/50 sm:bg-transparent shrink-0"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
