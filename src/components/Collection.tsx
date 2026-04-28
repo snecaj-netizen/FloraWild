@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, Trash2, ExternalLink, Leaf, Loader2 } from 'lucide-react';
+import { Search, Trash2, ExternalLink, Leaf, Loader2, Share2 } from 'lucide-react';
 import { Plant } from '@/src/types';
 import { cn } from '@/src/lib/utils';
 
@@ -8,11 +8,13 @@ interface CollectionProps {
   plants: Plant[];
   onSelect: (plant: Plant) => void;
   onDelete: (id: string) => void;
+  onShare: (plant: Plant) => void;
+  isSharing: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
 }
 
-export function Collection({ plants, onSelect, onDelete, searchQuery, onSearchChange }: CollectionProps) {
+export function Collection({ plants, onSelect, onDelete, onShare, isSharing, searchQuery, onSearchChange }: CollectionProps) {
   const [activeTab, setActiveTab] = useState<'plant' | 'mushroom'>('plant');
 
   const filteredPlants = plants.filter(p => {
@@ -89,6 +91,14 @@ export function Collection({ plants, onSelect, onDelete, searchQuery, onSearchCh
                     {plant.isEdible ? 'Commestibile' : 'Non Commestibile'}
                   </span>
                   <div className="flex gap-2">
+                    <button 
+                      onClick={() => onShare(plant)}
+                      disabled={isSharing}
+                      className="p-2 text-nature-300 hover:text-brand-500 transition-colors disabled:opacity-50"
+                      title="Condividi"
+                    >
+                      {isSharing ? <Loader2 size={18} className="animate-spin" /> : <Share2 size={18} />}
+                    </button>
                     <button 
                       onClick={() => onDelete(plant.id)}
                       className="p-2 text-nature-300 hover:text-red-500 transition-colors"

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X } from 'lucide-react';
+import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X, Sprout } from 'lucide-react';
 import { PlantIdentification } from '@/src/services/geminiService';
 import { cn } from '@/src/lib/utils';
 import * as htmlToImage from 'html-to-image';
@@ -289,6 +289,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
             onClick={generatePreview}
             disabled={isGenerating}
             className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all disabled:opacity-50"
+            title="Condividi scheda"
           >
             {isGenerating ? <Loader2 className="animate-spin" size={24} /> : <Share2 size={24} />}
           </button>
@@ -300,11 +301,53 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
               "p-4 rounded-2xl flex items-center justify-center transition-all",
               isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100"
             )}
+            title="Salva in collezione"
           >
             {isSaved ? <Check size={24} /> : <Save size={24} />}
           </button>
         </div>
       </div>
+
+      {plant.botanicalDetails && (
+        <section className="glass-card p-6 rounded-3xl grid grid-cols-2 gap-4">
+          <div className="col-span-2 mb-2 pb-2 border-b border-nature-100">
+            <h3 className="text-sm font-bold text-nature-400 uppercase tracking-widest flex items-center gap-2">
+              <Sprout size={14} />
+              Dettagli {plant.category === 'plant' ? 'Botanici' : 'Micologici'}
+            </h3>
+          </div>
+          {plant.botanicalDetails.leaf && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Foglie' : 'Cappello'}</p>
+              <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.leaf}</p>
+            </div>
+          )}
+          {plant.botanicalDetails.stem && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Fusto' : 'Gambo'}</p>
+              <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.stem}</p>
+            </div>
+          )}
+          {plant.botanicalDetails.flower && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Fiori' : 'Imenoforo'}</p>
+              <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.flower}</p>
+            </div>
+          )}
+          {plant.botanicalDetails.fruit && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Frutti' : 'Spore'}</p>
+              <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.fruit}</p>
+            </div>
+          )}
+          {plant.botanicalDetails.habitat && (
+            <div className="col-span-2 mt-2 pt-2 border-t border-nature-50 space-y-1">
+              <p className="text-[10px] font-bold text-nature-400 uppercase">Habitat Tipico</p>
+              <p className="text-sm text-nature-800 italic">{plant.botanicalDetails.habitat}</p>
+            </div>
+          )}
+        </section>
+      )}
 
       <SharePreviewModal 
         isOpen={!!previewImage}

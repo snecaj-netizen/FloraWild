@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X } from 'lucide-react';
+import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X, Share2, Send } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { User } from 'firebase/auth';
@@ -9,6 +9,9 @@ import { db } from '../firebase';
 import { OperationType, SavedSearch } from '../types';
 import { cn } from '../lib/utils';
 import { Slideshow } from './Slideshow';
+import { SharePreviewModal } from './SharePreviewModal';
+import * as htmlToImage from 'html-to-image';
+import { useRef } from 'react';
 
 interface SearchProps {
   user: User | null;
@@ -32,6 +35,12 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeSavedSearch, setActiveSavedSearch] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [apiError, setApiError] = useState<boolean>(false);
+  
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const performSearch = async (queryText: string) => {
     if (!queryText.trim()) return;
@@ -42,6 +51,7 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
     setImageUrls([]);
     setSaveSuccess(false);
     setActiveSavedSearch(null);
+    setApiError(false);
 
     try {
       let apiKey = process.env.GEMINI_API_KEY;
@@ -122,7 +132,16 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
       setImageUrls(newImageUrls.length > 0 ? newImageUrls : [newImageUrl]);
     } catch (error: any) {
       console.error("Search error:", error);
-      setResult(`Si è verificato un errore durante la ricerca: ${error.message || "Riprova più tardi."}`);
+      setApiError(true);
+      setResult(`**Ricerca Online non disponibile**
+
+Non è stato possibile collegarsi al servizio di intelligenza artificiale. 
+Questo può accadere se sei offline o se c'è un problema temporaneo con il servizio.
+
+**Cosa puoi fare?**
+* Controlla la tua connessione internet.
+* Consulta le tue **Ricerche Salvate** qui sotto (disponibili anche offline).
+* Riprova tra qualche istante.`);
     } finally {
       setIsLoading(false);
     }
@@ -225,6 +244,59 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
     }
   };
 
+  const handleShare = async () => {
+    if (!result || !searchQuery || !cardRef.current) return;
+    
+    setIsGenerating(true);
+    try {
+      const dataUrl = await htmlToImage.toPng(cardRef.current, {
+        quality: 0.95,
+        backgroundColor: '#f8fafc',
+      });
+      setPreviewImage(dataUrl);
+    } catch (err) {
+      console.error("Error generating preview:", err);
+      alert("Errore durante la creazione dell'anteprima.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleExecuteShare = async () => {
+    if (!previewImage) return;
+    
+    setIsSharing(true);
+    try {
+      const blob = await (await fetch(previewImage)).blob();
+      const file = new File([blob], `FloraWild_Esplora_${searchQuery.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+
+      const shareData: ShareData = {
+        title: `FloraWild: ${searchQuery}`,
+        text: `Ho scoperto queste informazioni su FloraWild riguardo a: ${searchQuery}`,
+        files: [file],
+        url: window.location.origin
+      };
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share(shareData);
+        setPreviewImage(null);
+      } else {
+        const link = document.createElement('a');
+        link.download = `FloraWild_Ricerca.png`;
+        link.href = previewImage;
+        link.click();
+        alert("Immagine scaricata! Puoi condividerla manualmente.");
+      }
+    } catch (err) {
+      console.error('Sharing failed', err);
+      if (err instanceof Error && err.name !== 'AbortError') {
+        alert("Errore durante la condivisione.");
+      }
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-10 relative">
       <header className="flex items-center justify-between gap-4">
@@ -312,6 +384,14 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
                 </h3>
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={handleShare}
+                    disabled={isGenerating}
+                    className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-all disabled:opacity-50"
+                  >
+                    {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Share2 size={14} />}
+                    Condividi
+                  </button>
+                  <button
                     onClick={handleCopy}
                     className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-nature-50 text-nature-600 hover:bg-nature-100 transition-all"
                   >
@@ -319,7 +399,7 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
                     {copied ? 'Copiato' : 'Copia'}
                   </button>
                   
-                  {!activeSavedSearch && (
+                  {!activeSavedSearch && !apiError && (
                     <button
                       onClick={handleSaveSearch}
                       disabled={isSaving || saveSuccess}
@@ -478,6 +558,54 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
         isOpen={showSlideshow}
         onClose={() => setShowSlideshow(false)}
         title={searchQuery}
+      />
+
+      {/* Hidden Card for Image Generation */}
+      <div className="fixed -left-[9999px] top-0">
+        <div 
+          ref={cardRef} 
+          className="w-[400px] bg-slate-50 p-8 flex flex-col gap-6 font-sans"
+          style={{ minHeight: '600px' }}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
+              <Sparkles className="text-white" size={20} />
+            </div>
+            <div>
+              <h4 className="font-serif font-bold text-slate-900 leading-none">FloraWild</h4>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Esplorazione Naturalistica</p>
+            </div>
+          </div>
+
+          <div className="relative rounded-3xl overflow-hidden aspect-video shadow-lg bg-nature-100">
+            {imageUrl && <img src={imageUrl} alt={searchQuery} className="w-full h-full object-cover" />}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+              <h2 className="text-2xl font-serif leading-tight">{searchQuery}</h2>
+              <p className="text-[10px] uppercase tracking-widest opacity-80">{activeCategory === 'plant' ? 'Pianta' : 'Fungo'}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-1">
+            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Risultato della ricerca</h5>
+            <div className="text-slate-600 text-[11px] leading-relaxed prose prose-slate prose-xs">
+              <ReactMarkdown>{result?.substring(0, 800) + (result && result.length > 800 ? '...' : '')}</ReactMarkdown>
+            </div>
+          </div>
+
+          <div className="mt-auto pt-6 border-t border-slate-200 flex justify-between items-center">
+            <p className="text-[10px] text-slate-400">Generato con FloraWild AI</p>
+            <p className="text-[10px] font-bold text-brand-600">florawild.app</p>
+          </div>
+        </div>
+      </div>
+
+      <SharePreviewModal 
+        isOpen={!!previewImage}
+        image={previewImage}
+        onConfirm={handleExecuteShare}
+        onCancel={() => setPreviewImage(null)}
+        isSharing={isSharing}
       />
     </div>
   );

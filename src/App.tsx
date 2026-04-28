@@ -36,11 +36,15 @@ import { PlantDetails } from './components/PlantDetails';
 import { AdminPanel } from './components/AdminPanel';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PasswordChangeModal } from './components/PasswordChangeModal';
+import { SharePreviewModal } from './components/SharePreviewModal';
 import { Plant, View, OperationType, SavedSearch } from './types';
 import { identifyPlant, PlantIdentification } from './services/geminiService';
 import { compressImage } from './lib/imageUtils';
-import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff, Edit2, ChevronRight, Check, Sprout } from 'lucide-react';
+import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff, Edit2, ChevronRight, Check, Sprout, Share2, Sparkles, AlertTriangle } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import * as htmlToImage from 'html-to-image';
+import { useRef } from 'react';
+import { cn } from './lib/utils';
 
 const safeStorage = {
   getItem: (key: string) => {
@@ -135,6 +139,13 @@ export default function App() {
   const [searchInitialQuery, setSearchInitialQuery] = useState<string | undefined>(undefined);
   const [previousView, setPreviousView] = useState<View>('home');
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+
+  // Sharing state for collection
+  const listShareCardRef = useRef<HTMLDivElement>(null);
+  const [sharePlant, setSharePlant] = useState<Plant | null>(null);
+  const [sharingPreview, setSharingPreview] = useState<string | null>(null);
+  const [isGeneratingShare, setIsGeneratingShare] = useState(false);
+  const [isExecutingShare, setIsExecutingShare] = useState(false);
 
   // Persistence effects
   useEffect(() => {
@@ -366,6 +377,67 @@ export default function App() {
       handleFirestoreError(error, OperationType.CREATE, path);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSharePlantInList = async (plant: Plant) => {
+    setSharePlant(plant);
+    setIsGeneratingShare(true);
+    
+    // Wait for state to update and ref to be ready
+    setTimeout(async () => {
+      if (!listShareCardRef.current) {
+        setIsGeneratingShare(false);
+        return;
+      }
+      try {
+        const dataUrl = await htmlToImage.toPng(listShareCardRef.current, {
+          quality: 0.95,
+          backgroundColor: '#f8fafc',
+        });
+        setSharingPreview(dataUrl);
+      } catch (err) {
+        console.error("Collection sharing wrap failed:", err);
+        alert("Errore durante la creazione dell'anteprima.");
+      } finally {
+        setIsGeneratingShare(false);
+      }
+    }, 100);
+  };
+
+  const executeCollectionShare = async () => {
+    if (!sharingPreview || !sharePlant) return;
+    
+    setIsExecutingShare(true);
+    try {
+      const blob = await (await fetch(sharingPreview)).blob();
+      const file = new File([blob], `FloraWild_${sharePlant.name.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+
+      const shareData: ShareData = {
+        title: `FloraWild: ${sharePlant.name}`,
+        text: `Guarda cosa ho scoperto su FloraWild riguardo a: ${sharePlant.name}`,
+        files: [file],
+        url: window.location.origin
+      };
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share(shareData);
+        setSharingPreview(null);
+        setSharePlant(null);
+      } else {
+        const link = document.createElement('a');
+        link.download = `FloraWild_${sharePlant.name}.png`;
+        link.href = sharingPreview;
+        link.click();
+        alert("Immagine scaricata! Puoi condividerla manualmente.");
+      }
+    } catch (err) {
+      console.error('Sharing failed', err);
+      if (err instanceof Error && err.name !== 'AbortError') {
+        alert("Errore durante la condivisione.");
+      }
+    } finally {
+      setIsExecutingShare(false);
     }
   };
 
@@ -638,6 +710,8 @@ export default function App() {
                 setCurrentView('details');
               }}
               onDelete={handleDeletePlant}
+              onShare={handleSharePlantInList}
+              isSharing={isGeneratingShare}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
             />
@@ -753,6 +827,63 @@ export default function App() {
             setTimeout(() => setResetMessage(null), 5000);
           }}
           onCancel={() => setShowChangePasswordModal(false)}
+        />
+
+        {/* Hidden Card for List Sharing */}
+        <div className="fixed -left-[9999px] top-0">
+          {sharePlant && (
+            <div 
+              ref={listShareCardRef} 
+              className="w-[400px] bg-slate-50 p-8 flex flex-col gap-6 font-sans"
+              style={{ minHeight: '600px' }}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
+                  <Sparkles className="text-white" size={20} />
+                </div>
+                <div>
+                  <h4 className="font-serif font-bold text-slate-900 leading-none">FloraWild</h4>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Dalla mia Collezione</p>
+                </div>
+              </div>
+
+              <div className="relative rounded-3xl overflow-hidden aspect-square shadow-lg">
+                <img src={sharePlant.imageUrl} alt={sharePlant.name} className="w-full h-full object-cover" />
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent text-white">
+                  <h2 className="text-2xl font-serif leading-tight">{sharePlant.name}</h2>
+                  <p className="text-xs italic opacity-80">{sharePlant.scientificName}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className={cn(
+                  "p-4 rounded-2xl flex items-center gap-3",
+                  sharePlant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                )}>
+                  {sharePlant.isEdible ? <Check size={20} /> : <AlertTriangle size={20} />}
+                  <p className="font-bold text-sm">{sharePlant.isEdible ? 'Commestibile' : 'Non Commestibile'}</p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Descrizione</h5>
+                  <p className="text-slate-600 text-xs leading-relaxed line-clamp-4">{sharePlant.description}</p>
+                </div>
+              </div>
+
+              <div className="mt-auto pt-6 border-t border-slate-200 flex justify-between items-center">
+                <p className="text-[10px] text-slate-400">Scansionato con FloraWild AI</p>
+                <p className="text-[10px] font-bold text-emerald-600">florawild.app</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <SharePreviewModal 
+          isOpen={!!sharingPreview}
+          image={sharingPreview}
+          onConfirm={executeCollectionShare}
+          onCancel={() => { setSharingPreview(null); setSharePlant(null); }}
+          isSharing={isExecutingShare}
         />
       </Layout>
   );

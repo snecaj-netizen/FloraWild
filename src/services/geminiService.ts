@@ -9,6 +9,13 @@ export interface PlantIdentification {
   culinaryUses: { title: string; recipeLink: string }[];
   phytotherapyUses: { title: string; recipeLink: string }[];
   description: string;
+  botanicalDetails?: {
+    leaf?: string;
+    flower?: string;
+    fruit?: string;
+    stem?: string;
+    habitat?: string;
+  };
   recognitionTips: { text: string; imageSearchTerm: string }[];
   warning?: string;
 }
@@ -55,6 +62,7 @@ export async function identifyPlant(
     - culinaryUses: lista di oggetti con "title" (nome ricetta/uso) e "recipeLink" (un link Google Search per la ricetta specifica)
     - phytotherapyUses: lista di oggetti con "title" (nome rimedio/uso) e "recipeLink" (un link Google Search per il rimedio specifico). Se funghi, scrivi "N/A" o usi medicinali se applicabili.
     - description: una breve descrizione botanica/micologica che includa il portamento e l'habitat tipico.
+    - botanicalDetails: un oggetto con descrizioni brevi e specifiche per "leaf" (foglie), "flower" (fiori/infiorescenze), "fruit" (frutti/semi o spore per funghi), "stem" (fusto/tronco o gambo per funghi), "habitat" (dove cresce).
     - recognitionTips: lista di 4-5 oggetti con "text" (consiglio pratico) e "imageSearchTerm" (una parola chiave molto specifica in inglese per trovare un'immagine di quel dettaglio botanico/micologico).
     - warning: eventuali avvertenze (es. somiglianze con specie tossiche, controindicazioni). PER I FUNGHI: includi sempre un avviso di non consumare mai senza il parere di un esperto dal vivo.
     
@@ -106,6 +114,16 @@ export async function identifyPlant(
               },
             },
             description: { type: Type.STRING },
+            botanicalDetails: {
+              type: Type.OBJECT,
+              properties: {
+                leaf: { type: Type.STRING },
+                flower: { type: Type.STRING },
+                fruit: { type: Type.STRING },
+                stem: { type: Type.STRING },
+                habitat: { type: Type.STRING }
+              }
+            },
             recognitionTips: {
               type: Type.ARRAY,
               items: { 
