@@ -181,11 +181,11 @@ export default function App() {
       if (Math.abs(currentScrollY - lastScrollY) < 10) return;
 
       if (currentScrollY > lastScrollY) {
-        // Scrolling down -> Show
-        setShowNavbar(true);
-      } else if (currentScrollY < lastScrollY) {
-        // Scrolling up -> Hide
+        // Scrolling down -> Hide (maximize content space)
         setShowNavbar(false);
+      } else if (currentScrollY < lastScrollY) {
+        // Scrolling up -> Show (intent to navigate)
+        setShowNavbar(true);
       }
       
       // Always show at top
