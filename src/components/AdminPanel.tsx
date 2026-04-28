@@ -85,7 +85,7 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
             </h1>
           </div>
           <div className="text-slate-500 text-[10px] sm:text-sm font-medium shrink-0 bg-slate-100 px-2 py-1 rounded-lg">
-            {users.length} <span className="hidden xs:inline">utenti</span>
+            {users.length} <span className="hidden sm:inline">utenti</span>
           </div>
         </div>
       </div>
@@ -128,12 +128,12 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 border-t sm:border-t-0 pt-3 sm:pt-0">
+                <div className="flex items-center justify-end gap-3 border-t sm:border-t-0 pt-4 sm:pt-0">
                   <button
                     onClick={() => toggleRole(user)}
-                    className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    className={`flex-1 sm:flex-initial h-11 sm:h-auto px-4 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
                       user.role === 'admin' 
-                        ? 'text-slate-600 hover:bg-slate-100 bg-slate-50' 
+                        ? 'text-slate-600 hover:bg-slate-100 bg-slate-100/50' 
                         : 'text-brand-600 hover:bg-brand-50 bg-brand-50/50'
                     }`}
                   >
@@ -141,9 +141,9 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                   </button>
                   <button
                     onClick={() => deleteUser(user.id)}
-                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors bg-slate-50 sm:bg-transparent"
+                    className="h-11 w-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors bg-slate-100/50 sm:bg-transparent shrink-0"
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={20} />
                   </button>
                 </div>
               </div>

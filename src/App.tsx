@@ -90,7 +90,7 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [currentView, setCurrentView] = useState<View>(() => {
     const saved = safeStorage.getItem('flora_view');
-    const validViews: View[] = ['home', 'camera', 'collection', 'search', 'details'];
+    const validViews: View[] = ['home', 'camera', 'collection', 'search', 'details', 'admin'];
     if (saved && validViews.includes(saved as View)) {
       return saved as View;
     }
