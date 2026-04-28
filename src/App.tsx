@@ -35,6 +35,7 @@ import { Search } from './components/Search';
 import { PlantDetails } from './components/PlantDetails';
 import { AdminPanel } from './components/AdminPanel';
 import { ConfirmModal } from './components/ConfirmModal';
+import { PasswordChangeModal } from './components/PasswordChangeModal';
 import { Plant, View, OperationType, SavedSearch } from './types';
 import { identifyPlant, PlantIdentification } from './services/geminiService';
 import { compressImage } from './lib/imageUtils';
@@ -127,6 +128,10 @@ export default function App() {
   });
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showNavbar, setShowNavbar] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
   const [searchInitialQuery, setSearchInitialQuery] = useState<string | undefined>(undefined);
   const [previousView, setPreviousView] = useState<View>('home');
   const [resetMessage, setResetMessage] = useState<string | null>(null);
@@ -166,6 +171,38 @@ export default function App() {
   useEffect(() => {
     safeStorage.setItem('flora_part', lastPart);
   }, [lastPart]);
+
+  // Scroll logic: Hide Navbar on Scroll UP, Show on Scroll DOWN
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Threshold to avoid flickering on tiny scrolls
+      if (Math.abs(currentScrollY - lastScrollY) < 10) return;
+
+      if (currentScrollY > lastScrollY) {
+        // Scrolling down -> Show
+        setShowNavbar(true);
+      } else if (currentScrollY < lastScrollY) {
+        // Scrolling up -> Hide
+        setShowNavbar(false);
+      }
+      
+      // Always show at top
+      if (currentScrollY < 10) setShowNavbar(true);
+      
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
+  // Scroll to top on view change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setShowNavbar(true);
+  }, [currentView]);
 
   // Error handling
   const handleFirestoreError = (error: any, operationType: OperationType, path: string | null) => {
@@ -549,17 +586,7 @@ export default function App() {
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Sicurezza Account</h4>
                 <div className="flex flex-col gap-2">
                   <button
-                    onClick={async () => {
-                      if (user?.email) {
-                        try {
-                          await resetPassword(user.email);
-                          setResetMessage("Email di reset inviata correttamente!");
-                          setTimeout(() => setResetMessage(null), 5000);
-                        } catch (err: any) {
-                          alert(err.message);
-                        }
-                      }
-                    }}
+                    onClick={() => setShowResetConfirm(true)}
                     className="w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all group"
                   >
                     <div className="flex items-center gap-3">
@@ -575,20 +602,7 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={async () => {
-                      const newPass = window.prompt("Inserisci la nuova password:");
-                      if (newPass && newPass.length >= 6) {
-                        try {
-                          await changePassword(newPass);
-                          setResetMessage("Password aggiornata con successo!");
-                          setTimeout(() => setResetMessage(null), 5000);
-                        } catch (err: any) {
-                          alert(err.message);
-                        }
-                      } else if (newPass) {
-                        alert("La password deve essere di almeno 6 caratteri.");
-                      }
-                    }}
+                    onClick={() => setShowChangePasswordModal(true)}
                     className="w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all group"
                   >
                     <div className="flex items-center gap-3">
@@ -682,6 +696,7 @@ export default function App() {
 
         <Navbar 
           currentView={currentView} 
+          visible={showNavbar}
           onViewChange={(view) => {
             if (view === 'search') setSearchInitialQuery(undefined);
             setCurrentView(view);
@@ -706,6 +721,38 @@ export default function App() {
           onCancel={() => setShowLogoutConfirm(false)}
           confirmText="Esci ora"
           variant="primary"
+        />
+
+        <ConfirmModal 
+          isOpen={showResetConfirm}
+          title="Resetta Password"
+          message="Invieremo un link di reset password al tuo indirizzo email. Sei sicuro di voler procedere?"
+          onConfirm={async () => {
+            if (user?.email) {
+              try {
+                await resetPassword(user.email);
+                setResetMessage("Email di reset inviata correttamente!");
+                setTimeout(() => setResetMessage(null), 5000);
+              } catch (err: any) {
+                alert(err.message);
+              } finally {
+                setShowResetConfirm(false);
+              }
+            }
+          }}
+          onCancel={() => setShowResetConfirm(false)}
+          confirmText="Invia link"
+          variant="primary"
+        />
+
+        <PasswordChangeModal 
+          isOpen={showChangePasswordModal}
+          onConfirm={async (newPass) => {
+            await changePassword(newPass);
+            setResetMessage("Password aggiornata con successo!");
+            setTimeout(() => setResetMessage(null), 5000);
+          }}
+          onCancel={() => setShowChangePasswordModal(false)}
         />
       </Layout>
   );
