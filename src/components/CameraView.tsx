@@ -121,6 +121,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
 
   const startCamera = async () => {
     setCameraError(null);
+    setLocation(undefined); // Reset location for new capture session
     requestLocation(); // Pre-emptive location request
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -191,6 +192,9 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setLocation(undefined); // Reset location to ensure we ONLY use EXIF for uploads
+      setIsGettingLocation(false);
+      
       // Try to get EXIF
       EXIF.getData(file as any, function(this: any) {
         const lat = EXIF.getTag(this, "GPSLatitude");
@@ -202,9 +206,6 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
           const latitude = (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === "N" ? 1 : -1);
           const longitude = (lon[0] + lon[1] / 60 + lon[2] / 3600) * (lonRef === "E" ? 1 : -1);
           setLocation({ lat: latitude, lng: longitude });
-        } else {
-          // If no EXIF, fallback to current browser location
-          requestLocation();
         }
       });
 
