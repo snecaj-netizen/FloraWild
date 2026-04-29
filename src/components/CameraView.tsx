@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, RefreshCw, X, Leaf, Flower, Apple, TreeDeciduous, Loader2 } from 'lucide-react';
+import { Camera, Upload, RefreshCw, X, Leaf, Flower, Apple, TreeDeciduous, Loader2, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '@/src/lib/utils';
+import EXIF from 'exif-js';
 
 interface CameraViewProps {
-  onCapture: (base64Image: string, category: 'plant' | 'mushroom', part: string) => void;
+  onCapture: (base64Image: string, category: 'plant' | 'mushroom', part: string, location?: { lat: number; lng: number }) => void;
   onClose: () => void;
   initialImage?: string | null;
 }
@@ -17,6 +18,8 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom'>('plant');
   const [selectedPart, setSelectedPart] = useState<string>('Intero');
   const [tempImage, setTempImage] = useState<string | null>(initialImage || null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const plantParts = [
@@ -96,8 +99,29 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
     }
   }, [isCameraActive, stream]);
 
+  const requestLocation = () => {
+    if (navigator.geolocation) {
+      setIsGettingLocation(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          setIsGettingLocation(false);
+        },
+        (error) => {
+          console.error("Location error:", error);
+          setIsGettingLocation(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  };
+
   const startCamera = async () => {
     setCameraError(null);
+    requestLocation(); // Pre-emptive location request
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Il tuo browser non supporta l'accesso alla fotocamera.");
@@ -159,6 +183,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
         const base64 = canvas.toDataURL('image/jpeg');
         setTempImage(base64);
         stopCamera();
+        if (!location) requestLocation();
       }
     }
   };
@@ -166,6 +191,23 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Try to get EXIF
+      EXIF.getData(file as any, function(this: any) {
+        const lat = EXIF.getTag(this, "GPSLatitude");
+        const lon = EXIF.getTag(this, "GPSLongitude");
+        const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
+        const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || "E";
+
+        if (lat && lon) {
+          const latitude = (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === "N" ? 1 : -1);
+          const longitude = (lon[0] + lon[1] / 60 + lon[2] / 3600) * (lonRef === "E" ? 1 : -1);
+          setLocation({ lat: latitude, lng: longitude });
+        } else {
+          // If no EXIF, fallback to current browser location
+          requestLocation();
+        }
+      });
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setTempImage(reader.result as string);
@@ -177,7 +219,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
 
   const handleConfirm = () => {
     if (tempImage) {
-      onCapture(tempImage, activeCategory, selectedPart);
+      onCapture(tempImage, activeCategory, selectedPart, location);
     }
   };
 
@@ -229,7 +271,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
           <div className="w-full h-full relative">
             <img src={tempImage} className="w-full h-full object-cover" alt="Captured" />
             <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-6">
-              <div className="bg-white rounded-3xl p-6 w-full max-w-xs space-y-6 shadow-2xl">
+              <div className="bg-white rounded-3xl p-6 w-full max-w-xs space-y-6 shadow-2xl overflow-y-auto max-h-full">
                 <div className="text-center">
                   <h3 className="text-xl font-serif text-nature-900">Cosa hai fotografato?</h3>
                   <p className="text-sm text-nature-500">Seleziona la parte per migliorare il riconoscimento</p>
@@ -253,7 +295,25 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
                   ))}
                 </div>
 
-                {/* Tip display */}
+                {/* Location indicator */}
+                <div className={cn(
+                  "flex items-center gap-2 p-3 rounded-xl border text-[11px] transition-all",
+                  location 
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700 font-bold" 
+                    : isGettingLocation 
+                      ? "bg-blue-50 border-blue-200 text-blue-700 animate-pulse"
+                      : "bg-nature-50 border-nature-100 text-nature-500"
+                )}>
+                  <MapPin size={14} />
+                  <span>
+                    {location 
+                      ? `Coordinate acquisite (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})` 
+                      : isGettingLocation 
+                        ? "Acquisizione posizione..." 
+                        : "Posizione non acquisita"}
+                  </span>
+                </div>
+
                 <div className="bg-nature-50 p-3 rounded-xl border border-nature-100">
                   <p className="text-[11px] text-nature-600 italic text-center">
                     <span className="font-bold text-nature-800 not-italic">Consiglio:</span> {parts.find(p => p.id === selectedPart)?.tips}

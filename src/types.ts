@@ -11,11 +11,12 @@ export interface Plant {
   recognitionTips: { text: string; imageSearchTerm: string }[];
   warning?: string;
   imageUrl: string;
+  location?: { lat: number; lng: number };
   createdAt: number;
   userId: string;
 }
 
-export type View = 'home' | 'camera' | 'collection' | 'search' | 'details' | 'admin';
+export type View = 'home' | 'camera' | 'collection' | 'map' | 'search' | 'details' | 'admin';
 
 export enum OperationType {
   CREATE = 'create',

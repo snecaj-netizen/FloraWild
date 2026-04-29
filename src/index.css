@@ -47,3 +47,23 @@
 .nature-gradient {
   background: linear-gradient(to bottom right, var(--color-nature-50), var(--color-brand-100));
 }
+
+/* Leaflet Customizations */
+.leaflet-container {
+  font-family: inherit !important;
+}
+
+.leaflet-popup-content-wrapper {
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 1rem !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
+}
+
+.leaflet-popup-tip-container {
+  display: none !important;
+}

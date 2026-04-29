@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Camera, Library, Search } from 'lucide-react';
+import { Home, Camera, Library, Search, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { View } from '@/src/types';
 
@@ -15,7 +15,8 @@ export function Navbar({ currentView, onViewChange, visible = true }: NavbarProp
   const navItems = [
     { id: 'home', icon: Home, label: 'Home' },
     { id: 'camera', icon: Camera, label: 'Identifica' },
-    { id: 'collection', icon: Library, label: 'Collezione' },
+    { id: 'map', icon: MapIcon, label: 'Mappa' },
+    { id: 'collection', icon: Library, label: 'Libreria' },
     { id: 'search', icon: Search, label: 'Cerca' },
   ];
 

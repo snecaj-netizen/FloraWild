@@ -33,6 +33,7 @@ import { CameraView } from './components/CameraView';
 import { Collection } from './components/Collection';
 import { Search } from './components/Search';
 import { PlantDetails } from './components/PlantDetails';
+import { DiscoveryMap } from './components/DiscoveryMap';
 import { AdminPanel } from './components/AdminPanel';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PasswordChangeModal } from './components/PasswordChangeModal';
@@ -97,7 +98,7 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [currentView, setCurrentView] = useState<View>(() => {
     const saved = safeStorage.getItem('flora_view');
-    const validViews: View[] = ['home', 'camera', 'collection', 'search', 'details', 'admin'];
+    const validViews: View[] = ['home', 'camera', 'collection', 'map', 'search', 'details', 'admin'];
     if (saved && validViews.includes(saved as View)) {
       return saved as View;
     }
@@ -126,6 +127,7 @@ export default function App() {
   const [lastPart, setLastPart] = useState<string>(() => {
     return safeStorage.getItem('flora_part') || 'Pianta intera';
   });
+  const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(() => {
     return safeStorage.getItem('flora_saved') === 'true';
@@ -140,6 +142,33 @@ export default function App() {
   const [previousView, setPreviousView] = useState<View>('home');
   const [resetMessage, setResetMessage] = useState<string | null>(null);
 
+  // Navigation with History API support
+  const navigateTo = (view: View, push = true) => {
+    if (view === currentView) return;
+    if (push) {
+      window.history.pushState({ view }, '', '');
+    }
+    setCurrentView(view);
+  };
+
+  useEffect(() => {
+    // Set initial history state
+    if (!window.history.state) {
+      window.history.replaceState({ view: currentView }, '', '');
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.view) {
+        setCurrentView(event.state.view as View);
+      } else {
+        setCurrentView('home');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Sharing state for collection
   const listShareCardRef = useRef<HTMLDivElement>(null);
   const [sharePlant, setSharePlant] = useState<Plant | null>(null);
@@ -151,7 +180,7 @@ export default function App() {
   useEffect(() => {
     // Safety check: if in details view but missing data, go home
     if (currentView === 'details' && (!identifiedPlant || !capturedImage) && !isIdentifying) {
-      setCurrentView('home');
+      navigateTo('home', false);
     }
     if (currentView !== 'details') {
       setPreviousView(currentView);
@@ -317,14 +346,15 @@ export default function App() {
     }
   }, [isAuthReady, user]);
 
-  const handleCapture = async (base64Image: string, category: 'plant' | 'mushroom', part: string) => {
+  const handleCapture = async (base64Image: string, category: 'plant' | 'mushroom', part: string, location?: { lat: number; lng: number }) => {
     setCapturedImage(base64Image);
     setLastPart(part);
+    setCapturedLocation(location);
     setIdentifyingCategory(category);
     setIsIdentifying(true);
     setIsSaved(false);
     setIdentifiedPlant(null);
-    setCurrentView('details');
+    navigateTo('details');
     
     try {
       const compressedForAi = await compressImage(base64Image, 1024, 1024, 0.7);
@@ -333,7 +363,7 @@ export default function App() {
     } catch (error: any) {
       console.error("Identification failed:", error);
       alert(`Errore durante l'identificazione: ${error.message || "Riprova più tardi."}`);
-      setCurrentView('home');
+      navigateTo('home');
     } finally {
       setIsIdentifying(false);
     }
@@ -368,6 +398,7 @@ export default function App() {
       await addDoc(collection(db, path), {
         ...identifiedPlant,
         imageUrl: compressedImage,
+        location: capturedLocation || null,
         userId: user.uid,
         createdAt: Date.now()
       });
@@ -606,7 +637,7 @@ export default function App() {
     <Layout>
       <div className="relative">
           {currentView === 'admin' && isAdmin && (
-            <AdminPanel onBack={() => setCurrentView('home')} />
+            <AdminPanel onBack={() => window.history.back()} />
           )}
 
           {currentView === 'home' && (
@@ -615,7 +646,7 @@ export default function App() {
                 <div className="flex gap-2">
                   {isAdmin && (
                     <button 
-                      onClick={() => setCurrentView('admin')}
+                      onClick={() => navigateTo('admin')}
                       className="p-3 bg-nature-100 rounded-2xl text-nature-600 hover:bg-nature-200 transition-all flex items-center gap-2 text-xs font-bold"
                     >
                       <Shield size={18} />
@@ -639,17 +670,17 @@ export default function App() {
                 </div>
               )}
               <Home 
-                onStartIdentify={() => setCurrentView('camera')}
-                onGoToCollection={() => setCurrentView('collection')}
+                onStartIdentify={() => navigateTo('camera')}
+                onGoToCollection={() => navigateTo('collection')}
                 onGoToSearch={(query) => {
                   setSearchInitialQuery(query);
-                  setCurrentView('search');
+                  navigateTo('search');
                 }}
                 onSelectPlant={(plant) => {
                   setIdentifiedPlant(plant);
                   setCapturedImage(plant.imageUrl);
                   setIsSaved(true);
-                  setCurrentView('details');
+                  navigateTo('details');
                 }}
                 savedSearches={savedSearches}
                 recentPlants={plants}
@@ -696,7 +727,7 @@ export default function App() {
           {currentView === 'camera' && (
             <CameraView 
               onCapture={handleCapture}
-              onClose={() => setCurrentView('home')}
+              onClose={() => window.history.back()}
             />
           )}
 
@@ -706,8 +737,9 @@ export default function App() {
               onSelect={(plant) => {
                 setIdentifiedPlant(plant);
                 setCapturedImage(plant.imageUrl);
+                setCapturedLocation(plant.location);
                 setIsSaved(true);
-                setCurrentView('details');
+                navigateTo('details');
               }}
               onDelete={handleDeletePlant}
               onShare={handleSharePlantInList}
@@ -717,12 +749,25 @@ export default function App() {
             />
           )}
 
+          {currentView === 'map' && (
+            <DiscoveryMap 
+              plants={plants}
+              onSelectPlant={(plant) => {
+                setIdentifiedPlant(plant);
+                setCapturedImage(plant.imageUrl);
+                setCapturedLocation(plant.location);
+                setIsSaved(true);
+                navigateTo('details');
+              }}
+            />
+          )}
+
           {currentView === 'search' && (
             <Search 
               user={user}
               onFirestoreError={handleFirestoreError}
               initialQuery={searchInitialQuery} 
-              onBack={() => setCurrentView('home')}
+              onBack={() => window.history.back()}
               savedSearches={savedSearches}
             />
           )}
@@ -739,16 +784,12 @@ export default function App() {
                   plant={identifiedPlant}
                   imageUrl={capturedImage}
                   onSave={handleSavePlant}
-                  onBack={() => {
-                    setIdentifiedPlant(null);
-                    setCapturedImage(null);
-                    setCurrentView(previousView);
-                  }}
-                  onRedo={() => setCurrentView('camera')}
+                  onBack={() => window.history.back()}
+                  onRedo={() => navigateTo('camera')}
                   onRefine={handleRefine}
                   onSearchQuery={(query) => {
                     setSearchInitialQuery(query);
-                    setCurrentView('search');
+                    navigateTo('search');
                   }}
                   isSaving={isSaving}
                   isSaved={isSaved}
@@ -757,7 +798,7 @@ export default function App() {
                 <div className="flex flex-col items-center justify-center py-20 gap-4 text-nature-400 text-center">
                   <p className="italic">Dati identificazione non trovati.</p>
                   <button 
-                    onClick={() => setCurrentView('home')}
+                    onClick={() => navigateTo('home')}
                     className="text-brand-600 font-bold underline"
                   >
                     Torna alla Home
@@ -773,7 +814,7 @@ export default function App() {
           visible={showNavbar}
           onViewChange={(view) => {
             if (view === 'search') setSearchInitialQuery(undefined);
-            setCurrentView(view);
+            navigateTo(view);
           }} 
         />
         
