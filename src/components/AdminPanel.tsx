@@ -12,6 +12,8 @@ import { db, auth } from '../firebase';
 import { Shield, User, Trash2, Mail, Calendar, ArrowLeft, Edit2, Check, X } from 'lucide-react';
 import { handleFirestoreError } from '../lib/utils';
 import { OperationType } from '../types';
+import { ConfirmModal } from './ConfirmModal';
+
 
 interface UserProfile {
   id: string;
@@ -20,12 +22,13 @@ interface UserProfile {
   createdAt: any;
 }
 
-export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
+export const AdminPanel = ({ onBack, onShowMessage }: { onBack: () => void, onShowMessage?: (msg: string) => void }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
@@ -64,17 +67,22 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
   const deleteUser = async (userId: string) => {
     if (userId === auth.currentUser?.uid) {
-      alert("Non puoi eliminare te stesso!");
+      if (onShowMessage) onShowMessage("⚠️ Non puoi eliminare te stesso!");
+      else alert("Non puoi eliminare te stesso!");
       return;
     }
 
-    if (window.confirm("Sei sicuro di voler eliminare questo utente? Questa operazione è irreversibile per il profilo Firestore.")) {
-      const path = `users/${userId}`;
-      try {
-        await deleteDoc(doc(db, 'users', userId));
-      } catch (error: any) {
-        handleFirestoreError(error, OperationType.DELETE, path);
-      }
+    setDeleteUserId(userId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteUserId) return;
+    const path = `users/${deleteUserId}`;
+    try {
+      await deleteDoc(doc(db, 'users', deleteUserId));
+      setDeleteUserId(null);
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -197,6 +205,16 @@ export const AdminPanel = ({ onBack }: { onBack: () => void }) => {
           </div>
         )}
       </div>
+
+      <ConfirmModal 
+        isOpen={!!deleteUserId}
+        title="Elimina Utente"
+        message="Sei sicuro di voler eliminare questo utente? Questa operazione è irreversibile e rimuoverà solo il profilo Firestore dell'utente."
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteUserId(null)}
+        confirmText="Elimina"
+        variant="danger"
+      />
     </div>
   );
 };

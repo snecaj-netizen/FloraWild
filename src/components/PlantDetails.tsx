@@ -17,11 +17,12 @@ interface PlantDetailsProps {
   onRedo: () => void;
   onRefine: (feedback: string) => void;
   onSearchQuery: (query: string) => void;
+  onShowMessage?: (msg: string) => void;
   isSaving?: boolean;
   isSaved?: boolean;
 }
 
-export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, isSaving, isSaved }: PlantDetailsProps) {
+export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, onShowMessage, isSaving, isSaved }: PlantDetailsProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -84,7 +85,8 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
       setPreviewImage(dataUrl);
     } catch (err) {
       console.error("Error generating preview:", err);
-      alert("Errore durante la creazione dell'anteprima.");
+      if (onShowMessage) onShowMessage("❌ Errore durante la creazione dell'anteprima.");
+      else alert("Errore durante la creazione dell'anteprima.");
     } finally {
       setIsGenerating(false);
     }
@@ -113,12 +115,14 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
         link.download = `FloraWild_${plant.name}.png`;
         link.href = previewImage;
         link.click();
-        alert("Immagine scaricata! Puoi condividerla manualmente.");
+        if (onShowMessage) onShowMessage("📂 Immagine scaricata! Puoi condividerla manualmente.");
+        else alert("Immagine scaricata! Puoi condividerla manualmente.");
       }
     } catch (err) {
       console.error("Error sharing:", err);
       if (err instanceof Error && err.name !== 'AbortError') {
-        alert("Errore durante la condivisione.");
+        if (onShowMessage) onShowMessage("❌ Errore durante la condivisione.");
+        else alert("Errore durante la condivisione.");
       }
     } finally {
       setIsSharing(false);

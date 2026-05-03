@@ -20,11 +20,12 @@ interface SearchProps {
   initialQuery?: string;
   onBack?: () => void;
   savedSearches: SavedSearch[];
+  onShowMessage?: (msg: string) => void;
 }
 
 const OFFLINE_CACHE_KEY = 'flora_search_cache';
 
-export function Search({ user, onFirestoreError, initialQuery, onBack, savedSearches }: SearchProps) {
+export function Search({ user, onFirestoreError, initialQuery, onBack, savedSearches, onShowMessage }: SearchProps) {
   const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
   const [searchQuery, setSearchQuery] = useState(initialQuery || '');
   const [result, setResult] = useState<string | null>(null);
@@ -267,7 +268,8 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
       setPreviewImage(dataUrl);
     } catch (err) {
       console.error("Error generating preview:", err);
-      alert("Errore durante la creazione dell'anteprima.");
+      if (onShowMessage) onShowMessage("❌ Errore durante la creazione dell'anteprima.");
+      else alert("Errore durante la creazione dell'anteprima.");
     } finally {
       setIsGenerating(false);
     }
@@ -296,12 +298,14 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
         link.download = `FloraWild_Ricerca.png`;
         link.href = previewImage;
         link.click();
-        alert("Immagine scaricata! Puoi condividerla manualmente.");
+        if (onShowMessage) onShowMessage("📂 Immagine scaricata! Puoi condividerla manualmente.");
+        else alert("Immagine scaricata! Puoi condividerla manualmente.");
       }
     } catch (err) {
       console.error('Sharing failed', err);
       if (err instanceof Error && err.name !== 'AbortError') {
-        alert("Errore durante la condivisione.");
+        if (onShowMessage) onShowMessage("❌ Errore durante la condivisione.");
+        else alert("Errore durante la condivisione.");
       }
     } finally {
       setIsSharing(false);

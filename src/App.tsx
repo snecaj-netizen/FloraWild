@@ -362,21 +362,14 @@ export default function App() {
 
   // Monitor network status and offline queue
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      processOfflineQueue();
-    };
+    const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
     // Initial queue load
-    loadOfflineQueue().then(() => {
-      if (navigator.onLine) {
-        processOfflineQueue();
-      }
-    });
+    loadOfflineQueue();
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -471,6 +464,8 @@ export default function App() {
             
             await offlineService.removeFromQueue(item.id);
             console.log(`Item ${item.id} saved to Firestore and removed from queue.`);
+            setResetMessage(`✅ Sincronizzato con successo: ${result.name}`);
+            setTimeout(() => setResetMessage(null), 4000);
           }
         } catch (error: any) {
           console.error(`Failed to process queued item ${item.id}:`, error);
@@ -525,7 +520,8 @@ export default function App() {
       };
       await offlineService.addToQueue(queuedItem);
       await loadOfflineQueue();
-      alert("Sei offline. L'immagine è stata ottimizzata e salvata in coda. Verrà identificata automaticamente quando tornerai online.");
+      setResetMessage("📸 Foto salvata in coda offline. Sincronizzala manualmente quando torni online!");
+      setTimeout(() => setResetMessage(null), 5000);
       navigateTo('home');
       return;
     }
@@ -539,7 +535,8 @@ export default function App() {
       setIdentifiedPlant(result);
     } catch (error: any) {
       console.error("Identification failed:", error);
-      alert(`Errore durante l'identificazione: ${error.message || "Riprova più tardi."}`);
+      setResetMessage(`❌ Errore identificazione: ${error.message || "Riprova più tardi."}`);
+      setTimeout(() => setResetMessage(null), 5000);
       navigateTo('home');
     } finally {
       setIsIdentifying(false);
@@ -559,7 +556,8 @@ export default function App() {
       setIdentifiedPlant(result);
     } catch (error: any) {
       console.error("Refinement failed:", error);
-      alert(`Errore durante il miglioramento: ${error.message || "Riprova più tardi."}`);
+      setResetMessage(`❌ Miglioramento fallito: ${error.message || "Riprova."}`);
+      setTimeout(() => setResetMessage(null), 5000);
     } finally {
       setIsIdentifying(false);
     }
@@ -606,7 +604,8 @@ export default function App() {
         setSharingPreview(dataUrl);
       } catch (err) {
         console.error("Collection sharing wrap failed:", err);
-        alert("Errore durante la creazione dell'anteprima.");
+        setResetMessage("❌ Errore creazione anteprima.");
+        setTimeout(() => setResetMessage(null), 4000);
       } finally {
         setIsGeneratingShare(false);
       }
@@ -637,12 +636,14 @@ export default function App() {
         link.download = `FloraWild_${sharePlant.name}.png`;
         link.href = sharingPreview;
         link.click();
-        alert("Immagine scaricata! Puoi condividerla manualmente.");
+        setResetMessage("📂 Immagine scaricata! Puoi condividerla manualmente.");
+        setTimeout(() => setResetMessage(null), 4000);
       }
     } catch (err) {
       console.error('Sharing failed', err);
       if (err instanceof Error && err.name !== 'AbortError') {
-        alert("Errore durante la condivisione.");
+        setResetMessage("❌ Errore durante la condivisione.");
+        setTimeout(() => setResetMessage(null), 4000);
       }
     } finally {
       setIsExecutingShare(false);
@@ -821,7 +822,13 @@ export default function App() {
           )}
 
           {currentView === 'admin' && isAdmin && (
-            <AdminPanel onBack={() => window.history.back()} />
+            <AdminPanel 
+              onBack={() => window.history.back()} 
+              onShowMessage={(msg) => {
+                setResetMessage(msg);
+                setTimeout(() => setResetMessage(null), 5000);
+              }}
+            />
           )}
 
           {currentView === 'home' && (
@@ -957,6 +964,10 @@ export default function App() {
               initialQuery={searchInitialQuery} 
               onBack={() => window.history.back()}
               savedSearches={savedSearches}
+              onShowMessage={(msg) => {
+                setResetMessage(msg);
+                setTimeout(() => setResetMessage(null), 5000);
+              }}
             />
           )}
 
@@ -992,6 +1003,10 @@ export default function App() {
                   onSearchQuery={(query) => {
                     setSearchInitialQuery(query);
                     navigateTo('search');
+                  }}
+                  onShowMessage={(msg) => {
+                    setResetMessage(msg);
+                    setTimeout(() => setResetMessage(null), 5000);
                   }}
                   isSaving={isSaving}
                   isSaved={isSaved}
@@ -1048,10 +1063,11 @@ export default function App() {
             if (user?.email) {
               try {
                 await resetPassword(user.email);
-                setResetMessage("Email di reset inviata correttamente!");
+                setResetMessage("📧 Email di reset inviata correttamente!");
                 setTimeout(() => setResetMessage(null), 5000);
               } catch (err: any) {
-                alert(err.message);
+                setResetMessage(`❌ Errore: ${err.message}`);
+                setTimeout(() => setResetMessage(null), 5000);
               } finally {
                 setShowResetConfirm(false);
               }
