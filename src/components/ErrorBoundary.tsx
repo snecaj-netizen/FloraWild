@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <RefreshCw size={20} />
             Ricarica App
           </button>
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <pre className="mt-8 p-4 bg-white rounded-xl text-left text-xs overflow-auto max-w-full border border-red-100 text-red-500">
               {this.state.error?.toString()}
             </pre>

@@ -1,6 +1,6 @@
 {
   "name": "FloraWild",
-  "description": "Identifica piante e alberi selvatici tramite foto. Scopri commestibilità, usi culinari e fitoterapici. Salva le tue scoperte in una collezione personale.",
+  "description": "Identifica piante selvatiche, funghi e piante coltivabili. Scopri commestibilità, usi culinari, fitoterapici e consigli per l'orto. Salva le tue scoperte in una collezione personale con localizzazione EXIF.",
   "requestFramePermissions": [
     "camera",
     "microphone",

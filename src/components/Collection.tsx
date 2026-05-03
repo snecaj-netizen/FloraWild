@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, Trash2, ExternalLink, Leaf, Loader2, Share2 } from 'lucide-react';
-import { Plant } from '@/src/types';
-import { cn } from '@/src/lib/utils';
+import { Search, Trash2, ExternalLink, Leaf, Loader2, Share2, Sprout } from 'lucide-react';
+import { Plant } from '../types';
+import { cn } from '../lib/utils';
 
 interface CollectionProps {
   plants: Plant[];
@@ -15,7 +15,7 @@ interface CollectionProps {
 }
 
 export function Collection({ plants, onSelect, onDelete, onShare, isSharing, searchQuery, onSearchChange }: CollectionProps) {
-  const [activeTab, setActiveTab] = useState<'plant' | 'mushroom'>('plant');
+  const [activeTab, setActiveTab] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
 
   const filteredPlants = plants.filter(p => {
     const categoryMatch = (p.category || 'plant') === activeTab;
@@ -24,32 +24,54 @@ export function Collection({ plants, onSelect, onDelete, onShare, isSharing, sea
     return categoryMatch && searchMatch;
   });
 
+  const getHeaderText = () => {
+    if (activeTab === 'plant') return 'Le piante selvatiche';
+    if (activeTab === 'mushroom') return 'I funghi';
+    return 'Le tue piante coltivabili';
+  };
+
+  const getEmptyStateText = () => {
+    if (activeTab === 'plant') return 'risultato botanico selvatico';
+    if (activeTab === 'mushroom') return 'risultato micologico';
+    return 'pianta da orto';
+  };
+
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-4xl font-serif mb-2">La tua Collezione</h1>
-        <p className="text-nature-500">{activeTab === 'plant' ? 'Le piante' : 'I funghi'} che hai scoperto e salvato.</p>
+        <h1 className="text-4xl font-serif mb-2">La tua Libreria</h1>
+        <p className="text-nature-500">{getHeaderText()} che hai scoperto e salvato.</p>
       </header>
 
-      <div className="flex p-1 bg-nature-100 rounded-2xl w-full">
+      <div className="flex p-1 bg-nature-100 rounded-2xl w-full gap-1">
         <button
           onClick={() => setActiveTab('plant')}
           className={cn(
-            "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-            activeTab === 'plant' ? "bg-white text-brand-600 shadow-sm" : "text-nature-500 hover:text-nature-700"
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5",
+            activeTab === 'plant' ? "bg-white text-brand-600 shadow-sm" : "text-nature-400 hover:text-nature-700"
           )}
         >
-          <Leaf size={16} />
-          Piante
+          <Leaf size={14} />
+          Selvatiche
+        </button>
+        <button
+          onClick={() => setActiveTab('cultivable')}
+          className={cn(
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5",
+            activeTab === 'cultivable' ? "bg-emerald-500 text-white shadow-sm" : "text-nature-400 hover:text-nature-700"
+          )}
+        >
+          <Sprout size={14} />
+          Coltivabili
         </button>
         <button
           onClick={() => setActiveTab('mushroom')}
           className={cn(
-            "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-            activeTab === 'mushroom' ? "bg-white text-brand-600 shadow-sm" : "text-nature-500 hover:text-nature-700"
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5",
+            activeTab === 'mushroom' ? "bg-white text-brand-600 shadow-sm" : "text-nature-400 hover:text-nature-700"
           )}
         >
-          <Loader2 size={16} />
+          <Loader2 size={14} />
           Funghi
         </button>
       </div>
@@ -118,7 +140,7 @@ export function Collection({ plants, onSelect, onDelete, onShare, isSharing, sea
           ))
         ) : (
           <div className="text-center py-12">
-            <p className="text-nature-300 italic">Nessun {activeTab === 'plant' ? 'risultato botanico' : 'risultato micologico'} trovato.</p>
+            <p className="text-nature-300 italic">Nessun {getEmptyStateText()} trovato.</p>
           </div>
         )}
       </div>

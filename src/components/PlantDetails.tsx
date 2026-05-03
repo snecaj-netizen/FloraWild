@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X, Sprout } from 'lucide-react';
-import { PlantIdentification } from '@/src/services/geminiService';
-import { cn } from '@/src/lib/utils';
+import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X, Sprout, Calendar, Droplets, Sun, MoveRight, Layers } from 'lucide-react';
+import { PlantIdentification } from '../services/geminiService';
+import { cn } from '../lib/utils';
 import * as htmlToImage from 'html-to-image';
 
 import { SharePreviewModal } from './SharePreviewModal';
@@ -13,6 +13,7 @@ interface PlantDetailsProps {
   imageUrl: string;
   onSave: () => void;
   onBack: () => void;
+  onClose?: () => void;
   onRedo: () => void;
   onRefine: (feedback: string) => void;
   onSearchQuery: (query: string) => void;
@@ -20,7 +21,7 @@ interface PlantDetailsProps {
   isSaved?: boolean;
 }
 
-export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine, onSearchQuery, isSaving, isSaved }: PlantDetailsProps) {
+export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, isSaving, isSaved }: PlantDetailsProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -129,38 +130,51 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
     setShowSlideshow(true);
   };
 
+  const getCategoryTheme = () => {
+    if (plant.category === 'cultivable') return { 
+      bg: 'bg-emerald-50 text-emerald-800', 
+      border: 'border-emerald-200', 
+      accent: 'text-emerald-600',
+      tagBg: 'bg-emerald-100 text-emerald-700',
+      label: 'Botanica (Orto)'
+    };
+    if (plant.category === 'mushroom') return { 
+      bg: 'bg-amber-50 text-amber-800', 
+      border: 'border-amber-200', 
+      accent: 'text-amber-600',
+      tagBg: 'bg-amber-100 text-amber-700',
+      label: 'Micologica'
+    };
+    return { 
+      bg: 'bg-nature-50 text-nature-800', 
+      border: 'border-nature-200', 
+      accent: 'text-nature-600',
+      tagBg: 'bg-nature-100 text-nature-700',
+      label: 'Botanica (Selvatica)'
+    };
+  };
+
+  const theme = getCategoryTheme();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="space-y-6 relative"
+      className="space-y-6 relative pb-20"
     >
-      {/* Absolute Close Button for Popup feel */}
-      <button 
-        onClick={onBack}
-        className="fixed top-4 right-4 z-50 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-nature-100 text-nature-600 hover:text-nature-900 transition-all active:scale-95"
-      >
-        <X size={24} />
-      </button>
-
       {/* Hidden Card for Image Generation */}
       <div className="fixed -left-[9999px] top-0">
-        <div 
-          ref={cardRef} 
-          className="w-[400px] bg-slate-50 p-8 flex flex-col gap-6 font-sans"
-          style={{ minHeight: '600px' }}
-        >
+        <div ref={cardRef} className="w-[400px] bg-slate-50 p-8 flex flex-col gap-6 font-sans">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
               <Sparkles className="text-white" size={20} />
             </div>
             <div>
               <h4 className="font-serif font-bold text-slate-900 leading-none">FloraWild</h4>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Identificazione {plant.category === 'plant' ? 'Botanica' : 'Micologica'}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Identificazione {theme.label}</p>
             </div>
           </div>
-
           <div className="relative rounded-3xl overflow-hidden aspect-square shadow-lg">
             <img src={imageUrl} alt={plant.name} className="w-full h-full object-cover" />
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent text-white">
@@ -168,32 +182,19 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
               <p className="text-xs italic opacity-80">{plant.scientificName}</p>
             </div>
           </div>
-
           <div className="space-y-4">
-            <div className={cn(
-              "p-4 rounded-2xl flex items-center gap-3",
-              plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-            )}>
+            <div className={cn("p-4 rounded-2xl flex items-center gap-3", plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")}>
               {plant.isEdible ? <Check size={20} /> : <AlertTriangle size={20} />}
               <p className="font-bold text-sm">{plant.isEdible ? 'Commestibile' : 'Non Commestibile'}</p>
             </div>
-
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
               <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Descrizione</h5>
               <p className="text-slate-600 text-xs leading-relaxed line-clamp-4">{plant.description}</p>
             </div>
-
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-              <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Consiglio di Riconoscimento</h5>
-              <p className="text-slate-600 text-xs leading-relaxed italic">
-                "{typeof plant.recognitionTips?.[0] === 'string' ? plant.recognitionTips?.[0] : plant.recognitionTips?.[0]?.text}"
-              </p>
-            </div>
           </div>
-
-          <div className="mt-auto pt-6 border-t border-slate-200 flex justify-between items-center">
-            <p className="text-[10px] text-slate-400">Scansionato con FloraWild AI</p>
-            <p className="text-[10px] font-bold text-emerald-600">florawild.app</p>
+          <div className="mt-auto pt-6 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-400">
+            <p>Scansionato con FloraWild AI</p>
+            <p className="font-bold text-emerald-600">florawild.app</p>
           </div>
         </div>
       </div>
@@ -226,37 +227,15 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
             </div>
           )}
         </div>
-
         <AnimatePresence>
           {isRefining && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
               <div className="bg-brand-50 p-4 rounded-2xl border border-brand-100 space-y-3">
                 <p className="text-xs font-bold text-brand-800 uppercase tracking-wider">Aiuta l'IA a identificare meglio</p>
-                <textarea
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Es: 'I fiori sono gialli', 'Cresce vicino a un fiume', 'Le foglie sono pelose'..."
-                  className="w-full p-3 rounded-xl border border-brand-200 focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm min-h-[80px]"
-                />
+                <textarea value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Es: 'I fiori sono gialli', 'Cresce vicino a un fiume', 'Le foglie sono pelose'..." className="w-full p-3 rounded-xl border border-brand-200 focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm min-h-[80px]" />
                 <div className="flex justify-end gap-2">
-                  <button 
-                    onClick={() => setIsRefining(false)}
-                    className="px-4 py-2 text-sm font-medium text-nature-500"
-                  >
-                    Annulla
-                  </button>
-                  <button 
-                    onClick={handleRefineSubmit}
-                    disabled={!feedback.trim()}
-                    className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm disabled:opacity-50"
-                  >
-                    Invia suggerimento
-                  </button>
+                  <button onClick={() => setIsRefining(false)} className="px-4 py-2 text-sm font-medium text-nature-500">Annulla</button>
+                  <button onClick={handleRefineSubmit} disabled={!feedback.trim()} className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm disabled:opacity-50">Invia suggerimento</button>
                 </div>
               </div>
             </motion.div>
@@ -266,6 +245,11 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
 
       <div className="relative rounded-3xl overflow-hidden shadow-xl aspect-square">
         <img src={imageUrl} alt={plant.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        <div className="absolute top-4 left-4">
+          <div className={cn("px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-sm border", theme.bg, theme.border)}>
+            {theme.label}
+          </div>
+        </div>
         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
           <h1 className="text-3xl font-serif mb-1">{plant.name}</h1>
           <p className="text-sm italic opacity-80">{plant.scientificName}</p>
@@ -273,70 +257,115 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
       </div>
 
       <div className="flex gap-4">
-        <div className={cn(
-          "flex-1 p-4 rounded-2xl flex items-center gap-3",
-          plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-        )}>
+        <div className={cn("flex-1 p-4 rounded-2xl flex items-center gap-3", plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")}>
           {plant.isEdible ? <Check size={24} /> : <AlertTriangle size={24} />}
           <div>
             <p className="text-xs font-bold uppercase tracking-wider">Commestibilità</p>
-            <p className="font-medium">{plant.isEdible ? 'Commestibile' : 'Non Commestibile'}</p>
+            <p className="font-medium text-sm leading-tight">{plant.isEdible ? 'Commestibile' : 'Non Commestibile'}</p>
           </div>
         </div>
-        
         <div className="flex gap-2">
-          <button
-            onClick={generatePreview}
-            disabled={isGenerating}
-            className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all disabled:opacity-50"
-            title="Condividi scheda"
-          >
+          <button onClick={generatePreview} disabled={isGenerating} className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all disabled:opacity-50">
             {isGenerating ? <Loader2 className="animate-spin" size={24} /> : <Share2 size={24} />}
           </button>
-          
-          <button
-            onClick={onSave}
-            disabled={isSaving || isSaved}
-            className={cn(
-              "p-4 rounded-2xl flex items-center justify-center transition-all",
-              isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100"
-            )}
-            title="Salva in collezione"
-          >
+          <button onClick={onSave} disabled={isSaving || isSaved} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all", isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100")}>
             {isSaved ? <Check size={24} /> : <Save size={24} />}
           </button>
         </div>
       </div>
 
+      {plant.category === 'cultivable' && plant.gardeningDetails && (
+        <section className="bg-emerald-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-emerald-100/50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-10">
+            <Sprout size={120} strokeWidth={1} />
+          </div>
+          <h3 className="text-xl font-serif mb-6 flex items-center gap-3">
+            <Calendar className="text-emerald-300" />
+            Guida alla Coltivazione
+          </h3>
+          
+          <div className="grid grid-cols-2 gap-x-6 gap-y-8">
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Semina</p>
+              <p className="text-lg font-medium leading-tight">{plant.gardeningDetails.sowingTime}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Impianto</p>
+              <p className="text-lg font-medium leading-tight">{plant.gardeningDetails.plantingTime}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Raccolta</p>
+              <p className="text-lg font-medium leading-tight">{plant.gardeningDetails.harvestTime}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Distanziamento</p>
+              <p className="text-lg font-medium leading-tight">{plant.gardeningDetails.spacing}</p>
+            </div>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 gap-6">
+            <div className="flex gap-4 items-start bg-emerald-700/30 p-5 rounded-[1.5rem] border border-emerald-500/30">
+              <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
+                <Sun size={20} className="text-white" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Esposizione Solare</p>
+                <p className="text-sm leading-relaxed">{plant.gardeningDetails.sunExposure}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-start bg-emerald-700/30 p-5 rounded-[1.5rem] border border-emerald-500/30">
+              <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
+                <Droplets size={20} className="text-white" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Irrigazione</p>
+                <p className="text-sm leading-relaxed">{plant.gardeningDetails.watering}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-start bg-emerald-700/30 p-5 rounded-[1.5rem] border border-emerald-500/30">
+              <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
+                <Layers size={20} className="text-white" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70">Terreno Ideale</p>
+                <p className="text-sm leading-relaxed">{plant.gardeningDetails.soilPreference}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {plant.botanicalDetails && (
         <section className="glass-card p-6 rounded-3xl grid grid-cols-2 gap-4">
           <div className="col-span-2 mb-2 pb-2 border-b border-nature-100">
             <h3 className="text-sm font-bold text-nature-400 uppercase tracking-widest flex items-center gap-2">
-              <Sprout size={14} />
-              Dettagli {plant.category === 'plant' ? 'Botanici' : 'Micologici'}
+              <MoveRight size={14} className={theme.accent} />
+              Analisi {plant.category === 'mushroom' ? 'Micologica' : 'Botanica'}
             </h3>
           </div>
           {plant.botanicalDetails.leaf && (
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Foglie' : 'Cappello'}</p>
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'mushroom' ? 'Cappello' : 'Foglie'}</p>
               <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.leaf}</p>
             </div>
           )}
           {plant.botanicalDetails.stem && (
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Fusto' : 'Gambo'}</p>
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'mushroom' ? 'Gambo' : 'Fusto'}</p>
               <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.stem}</p>
             </div>
           )}
           {plant.botanicalDetails.flower && (
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Fiori' : 'Imenoforo'}</p>
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'mushroom' ? 'Imenoforo' : 'Fiori'}</p>
               <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.flower}</p>
             </div>
           )}
           {plant.botanicalDetails.fruit && (
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'plant' ? 'Frutti' : 'Spore'}</p>
+              <p className="text-[10px] font-bold text-nature-400 uppercase">{plant.category === 'mushroom' ? 'Spore' : 'Frutti'}</p>
               <p className="text-sm text-nature-800 leading-tight">{plant.botanicalDetails.fruit}</p>
             </div>
           )}
@@ -349,23 +378,14 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
         </section>
       )}
 
-      <SharePreviewModal 
-        isOpen={!!previewImage}
-        image={previewImage}
-        onConfirm={handleExecuteShare}
-        onCancel={() => setPreviewImage(null)}
-        isSharing={isSharing}
-      />
-
       {plant.warning && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex gap-3 text-amber-800">
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex gap-3 text-amber-800 shadow-sm shadow-amber-100">
           <AlertTriangle size={24} className="shrink-0" />
-          <p className="text-sm">{plant.warning}</p>
+          <p className="text-sm leading-relaxed">{plant.warning}</p>
         </div>
       )}
 
       <div className="space-y-6">
-        {/* Recognition Tips Section */}
         <section className="glass-card p-6 rounded-3xl border-l-4 border-l-nature-400">
           <h3 className="text-lg font-serif mb-4 flex items-center gap-2 text-nature-800">
             <Info size={20} className="text-nature-500" />
@@ -375,21 +395,12 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
             {plant.recognitionTips?.map((tip, i) => (
               <div key={i} className="flex flex-col gap-3">
                 <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-nature-100 text-nature-600 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                    {i + 1}
-                  </span>
-                  <p className="text-nature-700 text-sm leading-relaxed">
-                    {typeof tip === 'string' ? tip : tip.text}
-                  </p>
+                  <span className="w-5 h-5 rounded-full bg-nature-100 text-nature-600 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
+                  <p className="text-nature-700 text-sm leading-relaxed">{typeof tip === 'string' ? tip : tip.text}</p>
                 </div>
                 {typeof tip !== 'string' && tip.imageSearchTerm && (
                   <div className="ml-8">
-                    <a 
-                      href={`https://www.google.com/search?q=${encodeURIComponent(plant.name + ' ' + tip.imageSearchTerm)}&tbm=isch`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-nature-50 hover:bg-nature-100 text-nature-600 text-xs font-bold rounded-xl border border-nature-200 transition-all group"
-                    >
+                    <a href={`https://www.google.com/search?q=${encodeURIComponent(plant.name + ' ' + tip.imageSearchTerm)}&tbm=isch`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-nature-50 hover:bg-nature-100 text-nature-600 text-xs font-bold rounded-xl border border-nature-200 transition-all group">
                       <Search size={14} className="group-hover:scale-110 transition-transform" />
                       Vedi esempio reale
                       <ExternalLink size={12} className="opacity-50" />
@@ -401,13 +412,11 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
           </div>
         </section>
 
-        {/* Botanical Gallery Section */}
         <section className="glass-card p-6 rounded-3xl">
           <h3 className="text-lg font-serif mb-4 flex items-center gap-2 text-nature-800">
             <ImageIcon size={20} className="text-nature-500" />
-            Galleria {plant.category === 'plant' ? 'Botanica' : 'Micologica'} (GBIF)
+            Galleria {plant.category === 'mushroom' ? 'Micologica' : 'Botanica'}
           </h3>
-          
           {isLoadingGallery ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="animate-spin text-nature-300" size={32} />
@@ -415,18 +424,8 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
           ) : galleryImages.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">
               {galleryImages.map((url, i) => (
-                <div 
-                  key={i} 
-                  className="aspect-square rounded-2xl overflow-hidden bg-nature-50 border border-nature-100 relative group cursor-zoom-in"
-                  onClick={() => openSlideshow(i)}
-                >
-                  <img 
-                    src={url} 
-                    alt={`${plant.name} gallery ${i}`} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                  />
+                <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-nature-50 border border-nature-100 relative group cursor-zoom-in" onClick={() => openSlideshow(i)}>
+                  <img src={url} alt={`${plant.name} gallery ${i}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                   <div className="absolute top-2 right-2 p-1.5 bg-white/20 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
                     <Maximize2 size={14} />
@@ -439,9 +438,6 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
               <p className="text-xs text-nature-400 italic">Nessuna immagine scientifica trovata per questa specie.</p>
             </div>
           )}
-          <p className="text-[9px] text-nature-400 mt-4 text-center italic">
-            Immagini fornite da GBIF.org - Global Biodiversity Information Facility
-          </p>
         </section>
 
         <section className="glass-card p-6 rounded-3xl">
@@ -451,11 +447,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
           </h3>
           <div className="flex flex-wrap gap-2">
             {plant.culinaryUses?.map((use, i) => (
-              <button 
-                key={i} 
-                onClick={() => onSearchQuery(use.title)}
-                className="inline-flex items-center gap-2 bg-brand-50 text-brand-800 px-4 py-2 rounded-xl text-sm hover:bg-brand-100 transition-colors border border-brand-100"
-              >
+              <button key={i} onClick={() => onSearchQuery(use.title)} className="inline-flex items-center gap-2 bg-brand-50 text-brand-800 px-4 py-2 rounded-xl text-sm hover:bg-brand-100 transition-colors border border-brand-100">
                 {use.title}
                 <Sparkles size={14} className="opacity-50" />
               </button>
@@ -463,7 +455,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
           </div>
         </section>
 
-        {plant.category === 'plant' ? (
+        {plant.category !== 'mushroom' ? (
           <section className="glass-card p-6 rounded-3xl">
             <h3 className="text-lg font-serif mb-3 flex items-center gap-2">
               <Heart size={20} className="text-nature-500" />
@@ -471,11 +463,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
             </h3>
             <div className="flex flex-wrap gap-2">
               {plant.phytotherapyUses?.map((use, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => onSearchQuery(use.title)}
-                  className="inline-flex items-center gap-2 bg-nature-50 text-nature-800 px-4 py-2 rounded-xl text-sm hover:bg-nature-100 transition-colors border border-nature-100"
-                >
+                <button key={i} onClick={() => onSearchQuery(use.title)} className="inline-flex items-center gap-2 bg-nature-50 text-nature-800 px-4 py-2 rounded-xl text-sm hover:bg-nature-100 transition-colors border border-nature-100">
                   {use.title}
                   <Sparkles size={14} className="opacity-50" />
                 </button>
@@ -488,8 +476,8 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
               <Info size={20} className="text-nature-500" />
               Habitat & Stagione
             </h3>
-            <p className="text-sm text-nature-600 italic">
-              Le informazioni micologiche richiedono prudenza estrema. Non consumare mai funghi identificati solo tramite app.
+            <p className="text-sm text-nature-600 italic leading-relaxed">
+              Le informazioni micologiche richiedono prudenza estrema. Non consumare mai funghi identificati solo tramite app senza consultare un esperto dal vivo.
             </p>
           </section>
         )}
@@ -500,13 +488,8 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onRedo, onRefine
         </section>
       </div>
 
-      <Slideshow 
-        images={galleryImages}
-        initialIndex={slideshowIndex}
-        isOpen={showSlideshow}
-        onClose={() => setShowSlideshow(false)}
-        title={plant.scientificName}
-      />
+      <SharePreviewModal isOpen={!!previewImage} image={previewImage} onConfirm={handleExecuteShare} onCancel={() => setPreviewImage(null)} isSharing={isSharing} />
+      <Slideshow images={galleryImages} initialIndex={slideshowIndex} isOpen={showSlideshow} onClose={() => setShowSlideshow(false)} title={plant.scientificName} />
     </motion.div>
   );
 }

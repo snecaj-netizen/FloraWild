@@ -52,20 +52,20 @@ service cloud.firestore {
     }
 
     function isValidPlant(data) {
-      return data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
-             data.category in ['plant', 'mushroom'] &&
-             data.scientificName is string && data.scientificName.size() >= 1 && data.scientificName.size() <= 100 &&
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 500 &&
+             data.category in ['plant', 'mushroom', 'cultivable'] &&
+             data.scientificName is string && data.scientificName.size() >= 1 && data.scientificName.size() <= 500 &&
              data.isEdible is bool &&
-             data.imageUrl is string && data.imageUrl.size() < 1048576 &&
+             data.imageUrl is string && data.imageUrl.size() < 2097152 && // Increased to 2MB for safety
              data.createdAt is number &&
              data.userId == request.auth.uid;
     }
 
     function isValidSearch(data) {
-      return data.query is string && data.query.size() >= 1 && data.query.size() <= 500 &&
-             data.category in ['plant', 'mushroom'] &&
+      return data.query is string && data.query.size() >= 1 && data.query.size() <= 1000 &&
+             data.category in ['plant', 'mushroom', 'cultivable'] &&
              data.result is string && data.result.size() >= 1 && data.result.size() <= 1048576 &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1048576)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2097152)) &&
              data.createdAt is number &&
              data.userId == request.auth.uid;
     }

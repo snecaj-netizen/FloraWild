@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X, Share2, Send } from 'lucide-react';
+import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X, Share2, Send, Sprout } from 'lucide-react';
+import { withRetry } from '../services/geminiService';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { User } from 'firebase/auth';
@@ -24,7 +25,7 @@ interface SearchProps {
 const OFFLINE_CACHE_KEY = 'flora_search_cache';
 
 export function Search({ user, onFirestoreError, initialQuery, onBack, savedSearches }: SearchProps) {
-  const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom'>('plant');
+  const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
   const [searchQuery, setSearchQuery] = useState(initialQuery || '');
   const [result, setResult] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
@@ -54,7 +55,7 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
     setApiError(false);
 
     try {
-      let apiKey = process.env.GEMINI_API_KEY;
+      let apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (apiKey) apiKey = apiKey.trim();
       
       if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
@@ -63,24 +64,34 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
       }
       const ai = new GoogleGenAI({ apiKey });
       
-      const expertRole = activeCategory === 'plant' 
-        ? "un esperto di botanica, cucina selvatica e fitoterapia" 
-        : "un micologo esperto, conoscitore di funghi commestibili e velenosi";
+      const getExpertRole = () => {
+        if (activeCategory === 'plant') return "un esperto di botanica, cucina selvatica e fitoterapia";
+        if (activeCategory === 'mushroom') return "un micologo esperto, conoscitore di funghi commestibili e velenosi";
+        return "un agronomo esperto, conoscitore di piante da orto, frutteto e giardino";
+      };
 
-      const prompt = `Sei ${expertRole}. 
+      const getTopic = () => {
+        if (activeCategory === 'plant') return "piante selvatiche, ricette o usi medicinali";
+        if (activeCategory === 'mushroom') return "funghi, commestibilità, pericoli e habitat";
+        return "piante coltivate, ortaggi, alberi da frutto, tecniche di coltivazione e consigli per l'orto";
+      };
+
+      const prompt = `Sei ${getExpertRole()}. 
        Rispondi alla seguente domanda o ricerca: "${queryText}".
-      Fornisci informazioni su ${activeCategory === 'plant' ? 'piante selvatiche, ricette o usi medicinali' : 'funghi, commestibilità, pericoli e habitat'}.
-      Usa un tono professionale ma appassionato. Formatta la risposta in Markdown.
-      Inoltre, alla fine della tua risposta, aggiungi DUE righe con questo formato ESATTO: 
-      LATIN_NAME: [nome scientifico in latino della specie principale se applicabile, altrimenti scrivi N/A]
-      IMAGE_KEYWORD: [una singola parola chiave in inglese per la ricerca immagini se LATIN_NAME è N/A]`;
+       Fornisci informazioni su ${getTopic()}.
+       Usa un tono professionale ma appassionato. Formatta la risposta in Markdown.
+       Inoltre, alla fine della tua risposta, aggiungi DUE righe con questo formato ESATTO: 
+       LATIN_NAME: [nome scientifico in latino della specie principale se applicabile, altrimenti scrivi N/A]
+       IMAGE_KEYWORD: [una singola parola chiave in inglese per la ricerca immagini se LATIN_NAME è N/A]`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      const response = await withRetry(async () => {
+        return await ai.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
       });
       
-      let text = response.text;
+      let text = response.text || '';
       let keyword = 'nature';
       let latinName = '';
       
@@ -323,7 +334,17 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
           )}
         >
           <Sparkles size={16} />
-          Piante
+          Selvatiche
+        </button>
+        <button
+          onClick={() => setActiveCategory('cultivable')}
+          className={cn(
+            "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+            activeCategory === 'cultivable' ? "bg-emerald-500 text-white shadow-sm" : "text-nature-500 hover:text-nature-700"
+          )}
+        >
+          <Sprout size={16} />
+          Coltivabili
         </button>
         <button
           onClick={() => setActiveCategory('mushroom')}
@@ -434,7 +455,7 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
                     </div>
                     <div className="absolute bottom-4 left-6 text-white w-full pr-12">
                       <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">
-                        {imageUrl.includes('gbif.org') ? 'Galleria Botanica (GBIF)' : 'Visualizzazione Suggerita'}
+                        {activeCategory === 'cultivable' ? 'Guida Coltivazione' : (imageUrl.includes('gbif.org') ? 'Galleria Botanica (GBIF)' : 'Visualizzazione Suggerita')}
                       </p>
                       <div className="flex items-center gap-2">
                         <h4 className="font-serif text-xl truncate">{searchQuery}</h4>
@@ -478,11 +499,11 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
                 </div>
                 <div className="p-6 bg-nature-50 border border-nature-100 rounded-3xl flex items-start gap-4">
                   <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm shrink-0">
-                    <Heart className="text-nature-500" size={24} />
+                    <Sprout className="text-emerald-500" size={24} />
                   </div>
                   <div>
-                    <h4 className="font-serif font-bold text-nature-900">Rimedi Naturali</h4>
-                    <p className="text-sm text-nature-700">Scopri tisane, decotti e proprietà curative delle piante spontanee.</p>
+                    <h4 className="font-serif font-bold text-nature-900">Guida all'Orto</h4>
+                    <p className="text-sm text-nature-700">Consigli su semina, cura e raccolta per le tue piante coltivate.</p>
                   </div>
                 </div>
               </div>
@@ -582,7 +603,7 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
               <h2 className="text-2xl font-serif leading-tight">{searchQuery}</h2>
-              <p className="text-[10px] uppercase tracking-widest opacity-80">{activeCategory === 'plant' ? 'Pianta' : 'Fungo'}</p>
+              <p className="text-[10px] uppercase tracking-widest opacity-80">{activeCategory === 'plant' ? 'Pianta' : (activeCategory === 'mushroom' ? 'Fungo' : 'Orto')}</p>
             </div>
           </div>
 

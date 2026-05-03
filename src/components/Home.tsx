@@ -1,6 +1,7 @@
 import React from 'react';
-import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight } from 'lucide-react';
-import { SavedSearch, Plant } from '../types';
+import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight, WifiOff, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
+import { SavedSearch, Plant, QueuedIdentification } from '../types';
+import { cn } from '../lib/utils';
 
 interface HomeProps {
   onStartIdentify: () => void;
@@ -9,14 +10,99 @@ interface HomeProps {
   onSelectPlant: (plant: Plant) => void;
   savedSearches?: SavedSearch[];
   recentPlants?: Plant[];
+  offlineQueue?: QueuedIdentification[];
+  isProcessingQueue?: boolean;
+  onProcessQueue?: () => void;
+  onClearQueue?: () => void;
 }
 
-export function Home({ onStartIdentify, onGoToCollection, onGoToSearch, onSelectPlant, savedSearches = [], recentPlants = [] }: HomeProps) {
+export function Home({ 
+  onStartIdentify, 
+  onGoToCollection, 
+  onGoToSearch, 
+  onSelectPlant, 
+  savedSearches = [], 
+  recentPlants = [],
+  offlineQueue = [],
+  isProcessingQueue = false,
+  onProcessQueue,
+  onClearQueue
+}: HomeProps) {
   const recentSearches = savedSearches.slice(0, 3);
   const displayPlants = recentPlants.slice(0, 3);
 
   return (
     <div className="space-y-10 pb-10">
+      {/* Offline Queue Indicator */}
+      {(offlineQueue.length > 0 || isProcessingQueue) && (
+        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex flex-col gap-3 shadow-sm animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
+                {isProcessingQueue ? <RefreshCw className="animate-spin" size={20} /> : <WifiOff size={20} />}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-amber-900">
+                  {isProcessingQueue ? "Sincronizzazione..." : "Coda Offline"}
+                </p>
+                <p className="text-[10px] text-amber-600 uppercase font-bold tracking-tight">
+                  {offlineQueue.length} {offlineQueue.length === 1 ? 'identificazione in attesa' : 'identificazioni in attesa'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!isProcessingQueue && offlineQueue.length > 0 && (
+                <>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onProcessQueue?.();
+                    }}
+                    className="p-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
+                    title="Avvia sincronizzazione"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClearQueue?.();
+                    }}
+                    className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                    title="Svuota coda"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          
+          {offlineQueue.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+               {offlineQueue.map((item) => (
+                 <div 
+                   key={item.id} 
+                   className={cn(
+                     "w-10 h-10 rounded-lg overflow-hidden border shrink-0 relative",
+                     item.status === 'processing' ? "border-amber-400 opacity-100 ring-2 ring-amber-400 ring-offset-1" : "border-amber-200 opacity-60",
+                     item.status === 'failed' ? "border-red-400 opacity-80" : ""
+                   )}
+                 >
+                   <img src={item.image} alt="Pending" className="w-full h-full object-cover" />
+                   {item.status === 'failed' && (
+                     <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                       <AlertTriangle size={12} className="text-red-600" />
+                     </div>
+                   )}
+                 </div>
+               ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <header className="text-center space-y-4">
         <div
           className="w-20 h-20 bg-nature-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-nature-200"

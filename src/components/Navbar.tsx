@@ -1,7 +1,7 @@
 import React from 'react';
 import { Home, Camera, Library, Search, Map as MapIcon } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
-import { View } from '@/src/types';
+import { cn } from '../lib/utils';
+import { View } from '../types';
 
 import { motion, AnimatePresence } from 'motion/react';
 

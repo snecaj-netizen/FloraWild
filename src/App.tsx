@@ -38,10 +38,11 @@ import { AdminPanel } from './components/AdminPanel';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PasswordChangeModal } from './components/PasswordChangeModal';
 import { SharePreviewModal } from './components/SharePreviewModal';
-import { Plant, View, OperationType, SavedSearch } from './types';
+import { Plant, View, OperationType, SavedSearch, QueuedIdentification } from './types';
 import { identifyPlant, PlantIdentification } from './services/geminiService';
+import { offlineService } from './services/offlineService';
 import { compressImage } from './lib/imageUtils';
-import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff, Edit2, ChevronRight, Check, Sprout, Share2, Sparkles, AlertTriangle } from 'lucide-react';
+import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff, Edit2, ChevronRight, Check, Sprout, Share2, Sparkles, AlertTriangle, X, WifiOff, RefreshCw } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import * as htmlToImage from 'html-to-image';
 import { useRef } from 'react';
@@ -72,15 +73,28 @@ const safeStorage = {
   }
 };
 
-const IdentificationStatus = ({ isIdentifying, category }: { isIdentifying: boolean, category: 'plant' | 'mushroom' }) => (
+const IdentificationStatus = ({ isIdentifying, category, onCancel }: { isIdentifying: boolean, category: 'plant' | 'mushroom' | 'cultivable', onCancel?: () => void }) => (
   <div className="flex flex-col items-center justify-center py-20 gap-6">
     <div className="relative">
       <div className="w-24 h-24 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
-      <Leaf className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-brand-500" size={32} />
+      <Leaf className={cn("absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2", category === 'mushroom' ? 'text-amber-500' : 'text-emerald-500')} size={32} />
     </div>
-    <p className="text-xl font-serif italic text-nature-600">
-      Analizzando {category === 'plant' ? 'la pianta' : 'il fungo'}...
-    </p>
+    <div className="text-center space-y-4">
+      <p className="text-xl font-serif italic text-nature-600">
+        {category === 'plant' && "Analizzando la pianta selvatica..."}
+        {category === 'cultivable' && "Analizzando la pianta per l'orto..."}
+        {category === 'mushroom' && "Analizzando il fungo..."}
+      </p>
+      {onCancel && (
+        <button 
+          onClick={onCancel}
+          className="text-sm font-medium text-nature-400 hover:text-nature-600 transition-colors flex items-center justify-center gap-2 w-full"
+        >
+          <X size={14} />
+          Annulla identificazione
+        </button>
+      )}
+    </div>
   </div>
 );
 
@@ -110,7 +124,7 @@ export default function App() {
   
   // Identification state
   const [isIdentifying, setIsIdentifying] = useState(false);
-  const [identifyingCategory, setIdentifyingCategory] = useState<'plant' | 'mushroom'>('plant');
+  const [identifyingCategory, setIdentifyingCategory] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
   const [identifiedPlant, setIdentifiedPlant] = useState<PlantIdentification | null>(() => {
     const saved = safeStorage.getItem('flora_plant');
     if (!saved) return null;
@@ -135,16 +149,21 @@ export default function App() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showClearQueueConfirm, setShowClearQueueConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [searchInitialQuery, setSearchInitialQuery] = useState<string | undefined>(undefined);
   const [previousView, setPreviousView] = useState<View>('home');
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineQueue, setOfflineQueue] = useState<QueuedIdentification[]>([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
 
   // Navigation with History API support
   const navigateTo = (view: View, push = true) => {
     if (view === currentView) return;
+    setPreviousView(currentView);
     if (push) {
       window.history.pushState({ view }, '', '');
     }
@@ -252,11 +271,22 @@ export default function App() {
         userId: auth.currentUser?.uid,
         email: auth.currentUser?.email,
         emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+        tenantId: auth.currentUser?.tenantId,
+        providerInfo: auth.currentUser?.providerData?.map(provider => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || []
       },
       operationType,
       path
     };
-    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    const jsonError = JSON.stringify(errInfo);
+    console.error('Firestore Error: ', jsonError);
+    // Only throw if it's a permission error or if we want to bubble it up
+    if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
+      throw new Error(jsonError);
+    }
   };
 
   useEffect(() => {
@@ -275,8 +305,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const key = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!key || key === 'undefined' || key === 'null' || key.length < 20 || key.includes('Free Tier')) {
+    const key = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!key || key === 'undefined' || key === 'null' || (typeof key === 'string' && key.length < 20) || (typeof key === 'string' && key.includes('Free Tier'))) {
       console.warn("⚠️ Gemini API Key invalid or placeholder detected:", key);
     } else {
       console.log("✅ Gemini API Key detected (Prefix:", key.substring(0, 4), "Length:", key.length, ")");
@@ -330,6 +360,117 @@ export default function App() {
     };
   }, [user, isAuthReady]);
 
+  // Monitor network status and offline queue
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      processOfflineQueue();
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial queue load
+    loadOfflineQueue().then(() => {
+      if (navigator.onLine) {
+        processOfflineQueue();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const loadOfflineQueue = async () => {
+    const queue = await offlineService.getQueue();
+    setOfflineQueue(queue);
+  };
+
+  const handleManualProcessQueue = async () => {
+    console.log("Manual queue process triggered. Online status:", navigator.onLine);
+    if (!navigator.onLine) {
+      setResetMessage("⚠️ Sei ancora offline. Connettiti a internet per sincronizzare.");
+      setTimeout(() => setResetMessage(null), 3000);
+      return;
+    }
+    
+    if (offlineQueue.length === 0) {
+      console.log("Queue is empty, nothing to process.");
+      setResetMessage("Coda vuota.");
+      setTimeout(() => setResetMessage(null), 3000);
+      return;
+    }
+
+    try {
+      console.log(`Starting processing of ${offlineQueue.length} items...`);
+      await processOfflineQueue();
+    } catch (error) {
+      console.error("Errore durante la sincronizzazione manuale:", error);
+      setResetMessage("❌ Errore durante la sincronizzazione.");
+      setTimeout(() => setResetMessage(null), 3000);
+    }
+  };
+
+  const handleClearOfflineQueue = async () => {
+    console.log("Clearing offline queue...");
+    await offlineService.clearQueue();
+    await loadOfflineQueue();
+    setShowClearQueueConfirm(false);
+    console.log("Offline queue cleared successfully.");
+    setResetMessage("✅ Coda offline cancellata.");
+    setTimeout(() => setResetMessage(null), 3000);
+  };
+
+  const processOfflineQueue = async () => {
+    if (isProcessingQueue) return;
+    
+    const queue = await offlineService.getQueue();
+    if (queue.length === 0) {
+      setIsProcessingQueue(false);
+      return;
+    }
+
+    setIsProcessingQueue(true);
+    
+    try {
+      for (const item of queue) {
+        if (item.status === 'processing') continue;
+        
+        try {
+          await offlineService.updateItemStatus(item.id, 'processing');
+          await loadOfflineQueue();
+          
+          const compressedForAi = await compressImage(item.image, 1024, 1024, 0.7);
+          const result = await identifyPlant(compressedForAi, item.category, item.part);
+          
+          if (user) {
+            const path = 'plants';
+            const compressedImage = await compressImage(item.image, 1024, 1024, 0.6);
+            await addDoc(collection(db, path), {
+              ...result,
+              imageUrl: compressedImage,
+              location: item.location || null,
+              userId: user.uid,
+              createdAt: Date.now()
+            });
+            
+            await offlineService.removeFromQueue(item.id);
+          }
+        } catch (error: any) {
+          console.error(`Failed to process queued item ${item.id}:`, error);
+          await offlineService.updateItemStatus(item.id, 'failed', error.message);
+        }
+        await loadOfflineQueue();
+      }
+    } finally {
+      await loadOfflineQueue();
+      setIsProcessingQueue(false);
+    }
+  };
+
   // Test connection
   useEffect(() => {
     if (isAuthReady && user) {
@@ -346,14 +487,32 @@ export default function App() {
     }
   }, [isAuthReady, user]);
 
-  const handleCapture = async (base64Image: string, category: 'plant' | 'mushroom', part: string, location?: { lat: number; lng: number }) => {
+  const handleCapture = async (base64Image: string, category: 'plant' | 'mushroom' | 'cultivable', part: string, location?: { lat: number; lng: number }) => {
     setCapturedImage(base64Image);
     setLastPart(part);
     setCapturedLocation(location);
     setIdentifyingCategory(category);
-    setIsIdentifying(true);
     setIsSaved(false);
     setIdentifiedPlant(null);
+
+    if (!isOnline) {
+      const queuedItem: QueuedIdentification = {
+        id: Math.random().toString(36).substring(7),
+        image: base64Image,
+        category,
+        part,
+        location,
+        timestamp: Date.now(),
+        status: 'pending'
+      };
+      await offlineService.addToQueue(queuedItem);
+      await loadOfflineQueue();
+      alert("Sei offline. L'immagine è stata salvata in coda e verrà identificata non appena tornerai online.");
+      navigateTo('home');
+      return;
+    }
+
+    setIsIdentifying(true);
     navigateTo('details');
     
     try {
@@ -635,7 +794,14 @@ export default function App() {
 
   return (
     <Layout>
-      <div className="relative">
+      <div className="relative min-h-screen">
+          {!isOnline && (
+            <div className="bg-slate-900 text-white text-[10px] py-1 px-4 flex items-center justify-center gap-2 sticky top-0 z-[200] font-bold uppercase tracking-widest animate-in slide-in-from-top duration-300">
+              <WifiOff size={12} />
+              Sei offline. Le foto verranno salvate in coda.
+            </div>
+          )}
+
           {currentView === 'admin' && isAdmin && (
             <AdminPanel onBack={() => window.history.back()} />
           )}
@@ -684,6 +850,10 @@ export default function App() {
                 }}
                 savedSearches={savedSearches}
                 recentPlants={plants}
+                offlineQueue={offlineQueue}
+                isProcessingQueue={isProcessingQueue}
+                onProcessQueue={handleManualProcessQueue}
+                onClearQueue={() => setShowClearQueueConfirm(true)}
               />
               <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Sicurezza Account</h4>
@@ -727,7 +897,7 @@ export default function App() {
           {currentView === 'camera' && (
             <CameraView 
               onCapture={handleCapture}
-              onClose={() => window.history.back()}
+              onClose={() => navigateTo('home')}
             />
           )}
 
@@ -774,10 +944,23 @@ export default function App() {
 
           {currentView === 'details' && (
             <div className="relative">
+              {/* Force a close button even during identification */}
+              <button 
+                onClick={() => navigateTo(previousView || 'home')}
+                className="fixed top-4 right-4 z-[120] p-3 bg-white/90 backdrop-blur-md rounded-full shadow-xl border border-nature-100 text-nature-600 hover:text-nature-900 transition-all active:scale-95 flex items-center justify-center"
+                aria-label="Chiudi"
+              >
+                <X size={24} strokeWidth={2.5} />
+              </button>
+
               {isIdentifying ? (
                 <IdentificationStatus 
                   isIdentifying={isIdentifying} 
                   category={identifyingCategory} 
+                  onCancel={() => {
+                    setIsIdentifying(false);
+                    navigateTo('home');
+                  }}
                 />
               ) : identifiedPlant && capturedImage ? (
                 <PlantDetails 
@@ -785,6 +968,7 @@ export default function App() {
                   imageUrl={capturedImage}
                   onSave={handleSavePlant}
                   onBack={() => window.history.back()}
+                  onClose={() => navigateTo('home')}
                   onRedo={() => navigateTo('camera')}
                   onRefine={handleRefine}
                   onSearchQuery={(query) => {
@@ -858,6 +1042,16 @@ export default function App() {
           onCancel={() => setShowResetConfirm(false)}
           confirmText="Invia link"
           variant="primary"
+        />
+
+        <ConfirmModal 
+          isOpen={showClearQueueConfirm}
+          title="Svuota Coda Offline"
+          message="ATTENZIONE: Stai per cancellare definitivamente tutte le foto salvate offline in attesa di identificazione. Questa azione non può essere annullata."
+          onConfirm={handleClearOfflineQueue}
+          onCancel={() => setShowClearQueueConfirm(false)}
+          confirmText="Sì, cancella tutto"
+          variant="danger"
         />
 
         <PasswordChangeModal 

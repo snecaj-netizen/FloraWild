@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, RefreshCw, X, Leaf, Flower, Apple, TreeDeciduous, Loader2, MapPin } from 'lucide-react';
+import { Camera, Upload, RefreshCw, X, Leaf, Flower, Apple, TreeDeciduous, Loader2, MapPin, Sprout } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '../lib/utils';
 import EXIF from 'exif-js';
 
 interface CameraViewProps {
-  onCapture: (base64Image: string, category: 'plant' | 'mushroom', part: string, location?: { lat: number; lng: number }) => void;
+  onCapture: (base64Image: string, category: 'plant' | 'mushroom' | 'cultivable', part: string, location?: { lat: number; lng: number }) => void;
   onClose: () => void;
   initialImage?: string | null;
 }
@@ -15,10 +15,10 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom'>('plant');
+  const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
   const [selectedPart, setSelectedPart] = useState<string>('Intero');
   const [tempImage, setTempImage] = useState<string | null>(initialImage || null);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -88,7 +88,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
     },
   ];
 
-  const parts = activeCategory === 'plant' ? plantParts : mushroomParts;
+  const parts = activeCategory === 'mushroom' ? mushroomParts : plantParts;
 
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -100,14 +100,16 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   }, [isCameraActive, stream]);
 
   const requestLocation = () => {
-    if (navigator.geolocation) {
+    if (navigator && navigator.geolocation) {
       setIsGettingLocation(true);
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
+          if (position && position.coords) {
+            setCapturedLocation({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            });
+          }
           setIsGettingLocation(false);
         },
         (error) => {
@@ -121,7 +123,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
 
   const startCamera = async () => {
     setCameraError(null);
-    setLocation(undefined); // Reset location for new capture session
+    setCapturedLocation(undefined); // Reset location for new capture session
     requestLocation(); // Pre-emptive location request
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -184,7 +186,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
         const base64 = canvas.toDataURL('image/jpeg');
         setTempImage(base64);
         stopCamera();
-        if (!location) requestLocation();
+        if (!capturedLocation) requestLocation();
       }
     }
   };
@@ -192,22 +194,35 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setLocation(undefined); // Reset location to ensure we ONLY use EXIF for uploads
+      setCapturedLocation(undefined); // Reset location to ensure we ONLY use EXIF for uploads
       setIsGettingLocation(false);
       
       // Try to get EXIF
-      EXIF.getData(file as any, function(this: any) {
-        const lat = EXIF.getTag(this, "GPSLatitude");
-        const lon = EXIF.getTag(this, "GPSLongitude");
-        const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
-        const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || "E";
+      try {
+        if (EXIF && typeof EXIF.getData === 'function') {
+          EXIF.getData(file as any, function(this: any) {
+            try {
+              const lat = EXIF.getTag(this, "GPSLatitude");
+              const lon = EXIF.getTag(this, "GPSLongitude");
+              const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
+              const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || "E";
 
-        if (lat && lon) {
-          const latitude = (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === "N" ? 1 : -1);
-          const longitude = (lon[0] + lon[1] / 60 + lon[2] / 3600) * (lonRef === "E" ? 1 : -1);
-          setLocation({ lat: latitude, lng: longitude });
+              if (lat && lon && Array.isArray(lat) && Array.isArray(lon) && lat.length >= 3 && lon.length >= 3) {
+                const latitude = (Number(lat[0]) + Number(lat[1]) / 60 + Number(lat[2]) / 3600) * (latRef === "N" ? 1 : -1);
+                const longitude = (Number(lon[0]) + Number(lon[1]) / 60 + Number(lon[2]) / 3600) * (lonRef === "E" ? 1 : -1);
+                
+                if (!isNaN(latitude) && !isNaN(longitude)) {
+                  setCapturedLocation({ lat: latitude, lng: longitude });
+                }
+              }
+            } catch (exifErr) {
+              console.warn("Error parsing EXIF tags:", exifErr);
+            }
+          });
         }
-      });
+      } catch (err) {
+        console.warn("EXIF.getData failed:", err);
+      }
 
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -220,8 +235,14 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
 
   const handleConfirm = () => {
     if (tempImage) {
-      onCapture(tempImage, activeCategory, selectedPart, location);
+      onCapture(tempImage, activeCategory, selectedPart, capturedLocation);
     }
+  };
+
+  const getCategoryLabel = () => {
+    if (activeCategory === 'plant') return 'Pianta Selvatica';
+    if (activeCategory === 'mushroom') return 'Fungo';
+    return 'Pianta Coltivabile';
   };
 
   return (
@@ -232,26 +253,43 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
       className="fixed inset-0 bg-black z-[100] flex flex-col"
     >
       <div className="p-4 flex justify-between items-center text-white z-10">
-        <h2 className="text-lg font-serif italic">Identifica {activeCategory === 'plant' ? 'Pianta' : 'Fungo'}</h2>
-        <button onClick={() => { stopCamera(); onClose(); }} className="p-2 hover:bg-white/10 rounded-full">
+        <h2 className="text-lg font-serif italic text-brand-300">Identifica {getCategoryLabel()}</h2>
+        <button 
+          onClick={() => { 
+            try { stopCamera(); } catch(e) { console.error(e); } 
+            onClose(); 
+          }} 
+          className="p-3 hover:bg-white/20 rounded-full transition-all active:scale-95"
+          aria-label="Chiudi"
+        >
           <X size={24} />
         </button>
       </div>
 
-      <div className="flex px-4 py-2 gap-4 z-10">
+      <div className="flex px-4 py-2 gap-2 z-10 max-w-full overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveCategory('plant')}
           className={cn(
-            "flex-1 py-2 px-4 rounded-xl text-xs font-bold transition-all border",
+            "whitespace-nowrap py-2 px-4 rounded-xl text-[10px] font-bold transition-all border shrink-0",
             activeCategory === 'plant' ? "bg-white text-brand-900 border-white" : "bg-white/10 text-white border-white/20"
           )}
         >
-          Piante
+          Selvatiche
+        </button>
+        <button
+          onClick={() => setActiveCategory('cultivable')}
+          className={cn(
+            "whitespace-nowrap py-2 px-4 rounded-xl text-[10px] font-bold transition-all border shrink-0 flex items-center gap-1.5",
+            activeCategory === 'cultivable' ? "bg-emerald-500 text-white border-emerald-500" : "bg-white/10 text-white border-white/20"
+          )}
+        >
+          <Sprout size={14} />
+          Coltivabili (Orto)
         </button>
         <button
           onClick={() => setActiveCategory('mushroom')}
           className={cn(
-            "flex-1 py-2 px-4 rounded-xl text-xs font-bold transition-all border",
+            "whitespace-nowrap py-2 px-4 rounded-xl text-[10px] font-bold transition-all border shrink-0",
             activeCategory === 'mushroom' ? "bg-white text-brand-900 border-white" : "bg-white/10 text-white border-white/20"
           )}
         >
@@ -299,7 +337,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
                 {/* Location indicator */}
                 <div className={cn(
                   "flex items-center gap-2 p-3 rounded-xl border text-[11px] transition-all",
-                  location 
+                  capturedLocation 
                     ? "bg-emerald-50 border-emerald-200 text-emerald-700 font-bold" 
                     : isGettingLocation 
                       ? "bg-blue-50 border-blue-200 text-blue-700 animate-pulse"
@@ -307,8 +345,8 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
                 )}>
                   <MapPin size={14} />
                   <span>
-                    {location 
-                      ? `Coordinate acquisite (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})` 
+                    {capturedLocation 
+                      ? `Coordinate acquisite (${capturedLocation.lat.toFixed(4)}, ${capturedLocation.lng.toFixed(4)})` 
                       : isGettingLocation 
                         ? "Acquisizione posizione..." 
                         : "Posizione non acquisita"}
