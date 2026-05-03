@@ -427,6 +427,12 @@ export default function App() {
   const processOfflineQueue = async () => {
     if (isProcessingQueue) return;
     
+    // Ensure user is authenticated before processing
+    if (!user) {
+      console.log("Waiting for user authentication before processing queue...");
+      return;
+    }
+
     const queue = await offlineService.getQueue();
     if (queue.length === 0) {
       setIsProcessingQueue(false);
@@ -434,37 +440,46 @@ export default function App() {
     }
 
     setIsProcessingQueue(true);
+    console.log(`Processing offline queue: ${queue.length} items found.`);
     
     try {
       for (const item of queue) {
         if (item.status === 'processing') continue;
         
         try {
+          console.log(`Processing item ${item.id} (${item.category})...`);
           await offlineService.updateItemStatus(item.id, 'processing');
           await loadOfflineQueue();
           
-          const compressedForAi = await compressImage(item.image, 1024, 1024, 0.7);
-          const result = await identifyPlant(compressedForAi, item.category, item.part);
+          // Use the stored image directly if possible, or compress once
+          // item.image is already b64. Let's ensure it's a valid b64 for identifyPlant
+          const result = await identifyPlant(item.image, item.category, item.part);
+          console.log(`Identification successful for ${item.id}:`, result.name);
           
           if (user) {
             const path = 'plants';
-            const compressedImage = await compressImage(item.image, 1024, 1024, 0.6);
+            // Simple compression for DB storage to save space, but avoid multiple heavy passes
+            const compressedForDb = await compressImage(item.image, 1200, 1200, 0.7);
+            
             await addDoc(collection(db, path), {
               ...result,
-              imageUrl: compressedImage,
+              imageUrl: compressedForDb,
               location: item.location || null,
               userId: user.uid,
-              createdAt: Date.now()
+              createdAt: item.timestamp // Keep original capture time
             });
             
             await offlineService.removeFromQueue(item.id);
+            console.log(`Item ${item.id} saved to Firestore and removed from queue.`);
           }
         } catch (error: any) {
           console.error(`Failed to process queued item ${item.id}:`, error);
-          await offlineService.updateItemStatus(item.id, 'failed', error.message);
+          await offlineService.updateItemStatus(item.id, 'failed', error.message || "Errore sconosciuto");
         }
         await loadOfflineQueue();
       }
+    } catch (globalError) {
+      console.error("Global error in processOfflineQueue:", globalError);
     } finally {
       await loadOfflineQueue();
       setIsProcessingQueue(false);
@@ -496,9 +511,12 @@ export default function App() {
     setIdentifiedPlant(null);
 
     if (!isOnline) {
+      // Compress BEFORE queuing to save IndexedDB space and improve reliability
+      const compressedForOffline = await compressImage(base64Image, 1200, 1200, 0.7);
+      
       const queuedItem: QueuedIdentification = {
         id: Math.random().toString(36).substring(7),
-        image: base64Image,
+        image: compressedForOffline,
         category,
         part,
         location,
@@ -507,7 +525,7 @@ export default function App() {
       };
       await offlineService.addToQueue(queuedItem);
       await loadOfflineQueue();
-      alert("Sei offline. L'immagine è stata salvata in coda e verrà identificata non appena tornerai online.");
+      alert("Sei offline. L'immagine è stata ottimizzata e salvata in coda. Verrà identificata automaticamente quando tornerai online.");
       navigateTo('home');
       return;
     }
