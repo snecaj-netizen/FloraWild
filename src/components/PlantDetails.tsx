@@ -31,27 +31,35 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
   const [feedback, setFeedback] = useState('');
   
   // Botanical Gallery State
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [galleryImages, setGalleryImages] = useState<Record<string, string[]>>({});
+  const [activePart, setActivePart] = useState<string>('all');
   const [isLoadingGallery, setIsLoadingGallery] = useState(false);
   const [showSlideshow, setShowSlideshow] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
+  const [slideshowImages, setSlideshowImages] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchBotanicalImages = async () => {
       if (!plant.scientificName) return;
       setIsLoadingGallery(true);
       try {
-        // Fetch from GBIF API (Global Biodiversity Information Facility)
-        const response = await fetch(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(plant.scientificName)}&mediaType=StillImage&limit=6`);
-        const data = await response.json();
+        const parts = ['all', 'leaf', 'flower', 'fruit', 'stem'];
+        const results: Record<string, string[]> = {};
         
-        const images = data.results
-          .flatMap((r: any) => r.media)
-          .filter((m: any) => m.type === 'StillImage')
-          .map((m: any) => m.identifier)
-          .filter((url: string) => url && (url.startsWith('http') || url.startsWith('https')));
+        for (const part of parts) {
+          const query = part === 'all' ? plant.scientificName : `${plant.scientificName} ${part}`;
+          const response = await fetch(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(query)}&mediaType=StillImage&limit=6`);
+          const data = await response.json();
           
-        setGalleryImages(Array.from(new Set(images)).slice(0, 6) as string[]);
+          const images = data.results
+            .flatMap((r: any) => r.media)
+            .filter((m: any) => m.type === 'StillImage')
+            .map((m: any) => m.identifier)
+            .filter((url: string) => url && (url.startsWith('http') || url.startsWith('https')));
+            
+          results[part] = Array.from(new Set(images)).slice(0, 6) as string[];
+        }
+        setGalleryImages(results);
       } catch (err) {
         console.error("Error fetching botanical gallery:", err);
       } finally {
@@ -61,6 +69,41 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
 
     fetchBotanicalImages();
   }, [plant.scientificName]);
+
+  const labelMap: Record<string, string> = { all: 'Tutte', leaf: 'Foglie', flower: 'Fiori', fruit: 'Frutti', stem: 'Fusto' };
+  const allImages = galleryImages[activePart] || [];
+
+  const openSlideshow = (index: number, images: string[]) => {
+    setSlideshowImages(images);
+    setSlideshowIndex(index);
+    setShowSlideshow(true);
+  };
+
+  const getCategoryTheme = () => {
+    if (plant.category === 'cultivable') return { 
+      bg: 'bg-emerald-50 text-emerald-800', 
+      border: 'border-emerald-200', 
+      accent: 'text-emerald-600',
+      tagBg: 'bg-emerald-100 text-emerald-700',
+      label: 'Botanica (Orto)'
+    };
+    if (plant.category === 'mushroom') return { 
+      bg: 'bg-amber-50 text-amber-800', 
+      border: 'border-amber-200', 
+      accent: 'text-amber-600',
+      tagBg: 'bg-amber-100 text-amber-700',
+      label: 'Micologica'
+    };
+    return { 
+      bg: 'bg-nature-50 text-nature-800', 
+      border: 'border-nature-200', 
+      accent: 'text-nature-600',
+      tagBg: 'bg-nature-100 text-nature-700',
+      label: 'Botanica (Selvatica)'
+    };
+  };
+
+  const theme = getCategoryTheme();
 
   const handleRefineSubmit = () => {
     if (!feedback.trim()) return;
@@ -128,37 +171,6 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
       setIsSharing(false);
     }
   };
-
-  const openSlideshow = (index: number) => {
-    setSlideshowIndex(index);
-    setShowSlideshow(true);
-  };
-
-  const getCategoryTheme = () => {
-    if (plant.category === 'cultivable') return { 
-      bg: 'bg-emerald-50 text-emerald-800', 
-      border: 'border-emerald-200', 
-      accent: 'text-emerald-600',
-      tagBg: 'bg-emerald-100 text-emerald-700',
-      label: 'Botanica (Orto)'
-    };
-    if (plant.category === 'mushroom') return { 
-      bg: 'bg-amber-50 text-amber-800', 
-      border: 'border-amber-200', 
-      accent: 'text-amber-600',
-      tagBg: 'bg-amber-100 text-amber-700',
-      label: 'Micologica'
-    };
-    return { 
-      bg: 'bg-nature-50 text-nature-800', 
-      border: 'border-nature-200', 
-      accent: 'text-nature-600',
-      tagBg: 'bg-nature-100 text-nature-700',
-      label: 'Botanica (Selvatica)'
-    };
-  };
-
-  const theme = getCategoryTheme();
 
   return (
     <motion.div
@@ -421,25 +433,49 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
             <ImageIcon size={20} className="text-nature-500" />
             Galleria {plant.category === 'mushroom' ? 'Micologica' : 'Botanica'}
           </h3>
+          
           {isLoadingGallery ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="animate-spin text-nature-300" size={32} />
             </div>
-          ) : galleryImages.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
-              {galleryImages.map((url, i) => (
-                <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-nature-50 border border-nature-100 relative group cursor-zoom-in" onClick={() => openSlideshow(i)}>
-                  <img src={url} alt={`${plant.name} gallery ${i}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                  <div className="absolute top-2 right-2 p-1.5 bg-white/20 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Maximize2 size={14} />
-                  </div>
+          ) : Object.keys(galleryImages).length > 0 ? (
+            <>
+              <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
+                {Object.keys(galleryImages).map((part) => (
+                  <button
+                    key={part}
+                    onClick={() => setActivePart(part)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-bold capitalize whitespace-nowrap transition-colors",
+                      activePart === part ? "bg-nature-600 text-white" : "bg-nature-100 text-nature-600 hover:bg-nature-200"
+                    )}
+                  >
+                    {labelMap[part] || part}
+                  </button>
+                ))}
+              </div>
+              
+              {allImages.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {allImages.map((url, i) => (
+                    <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-nature-50 border border-nature-100 relative group cursor-zoom-in" onClick={() => openSlideshow(i, allImages)}>
+                      <img src={url} alt={`${plant.name} - ${activePart} ${i}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                      <div className="absolute top-2 right-2 p-1.5 bg-white/20 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Maximize2 size={14} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div className="text-center py-8 bg-nature-50 rounded-2xl border border-dashed border-nature-200">
+                  <p className="text-xs text-nature-400 italic">Nessuna immagine trovata per questo dettaglio.</p>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-8 bg-nature-50 rounded-2xl border border-dashed border-nature-200">
-              <p className="text-xs text-nature-400 italic">Nessuna immagine scientifica trovata per questa specie.</p>
+              <p className="text-xs text-nature-400 italic">Nessuna immagine scientifica trovata.</p>
             </div>
           )}
         </section>
@@ -493,7 +529,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
       </div>
 
       <SharePreviewModal isOpen={!!previewImage} image={previewImage} onConfirm={handleExecuteShare} onCancel={() => setPreviewImage(null)} isSharing={isSharing} />
-      <Slideshow images={galleryImages} initialIndex={slideshowIndex} isOpen={showSlideshow} onClose={() => setShowSlideshow(false)} title={plant.scientificName} />
+      <Slideshow images={slideshowImages} initialIndex={slideshowIndex} isOpen={showSlideshow} onClose={() => setShowSlideshow(false)} title={plant.scientificName} />
     </motion.div>
   );
 }

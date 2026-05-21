@@ -11,6 +11,7 @@ import { OperationType, SavedSearch } from '../types';
 import { cn } from '../lib/utils';
 import { Slideshow } from './Slideshow';
 import { SharePreviewModal } from './SharePreviewModal';
+import { ConfirmModal } from './ConfirmModal';
 import * as htmlToImage from 'html-to-image';
 import { useRef } from 'react';
 
@@ -30,7 +31,8 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
   const [searchQuery, setSearchQuery] = useState(initialQuery || '');
   const [result, setResult] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState<Record<string, string[]>>({ all: [] });
+  const [activePart, setActivePart] = useState<string>('all');
   const [showSlideshow, setShowSlideshow] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,6 +40,10 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
   const [activeSavedSearch, setActiveSavedSearch] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [apiError, setApiError] = useState<boolean>(false);
+  const [deleteSearchId, setDeleteSearchId] = useState<string | null>(null);
+  
+  const labelMap: Record<string, string> = { all: 'Tutte', leaf: 'Foglie', flower: 'Fiori', fruit: 'Frutti', stem: 'Fusto' };
+  const getLabel = (part: string) => labelMap[part] || part;
   
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -50,7 +56,7 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
     setIsLoading(true);
     setResult(null);
     setImageUrl(undefined);
-    setImageUrls([]);
+    setImageUrls({ all: [] });
     setSaveSuccess(false);
     setActiveSavedSearch(null);
     setApiError(false);
@@ -111,29 +117,34 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
       setResult(text.trim() || "Nessun risultato trovato.");
       
       let newImageUrl = `https://loremflickr.com/800/600/wild,nature,${keyword}/all`;
-      let newImageUrls: string[] = [];
+      let newImageUrls: Record<string, string[]> = { all: [] };
 
       if (latinName && latinName !== 'N/A') {
         try {
-          const gbifRes = await fetch(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(latinName)}&mediaType=StillImage&limit=5`);
-          const gbifData = await gbifRes.json();
+          const parts = ['all', 'leaf', 'flower', 'fruit', 'stem'];
           
-          if (gbifData.results && gbifData.results.length > 0) {
-            const allImages: string[] = [];
-            gbifData.results.forEach((res: any) => {
-              if (res.media) {
-                res.media.forEach((m: any) => {
-                  if (m.identifier && m.type === 'StillImage') {
-                    allImages.push(m.identifier);
-                  }
-                });
-              }
-            });
+          for (const part of parts) {
+            const query = part === 'all' ? latinName : `${latinName} ${part}`;
+            const gbifRes = await fetch(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(query)}&mediaType=StillImage&limit=4`);
+            const gbifData = await gbifRes.json();
             
-            if (allImages.length > 0) {
-              newImageUrls = [...new Set(allImages)].slice(0, 8);
-              newImageUrl = newImageUrls[0];
+            const partImages: string[] = [];
+            if (gbifData.results && gbifData.results.length > 0) {
+              gbifData.results.forEach((res: any) => {
+                if (res.media) {
+                  res.media.forEach((m: any) => {
+                    if (m.identifier && m.type === 'StillImage') {
+                      partImages.push(m.identifier);
+                    }
+                  });
+                }
+              });
             }
+            newImageUrls[part] = Array.from(new Set(partImages));
+          }
+          
+          if (newImageUrls.all.length > 0) {
+            newImageUrl = newImageUrls.all[0];
           }
         } catch (err) {
           console.error("GBIF fetch error:", err);
@@ -141,7 +152,8 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
       }
       
       setImageUrl(newImageUrl);
-      setImageUrls(newImageUrls.length > 0 ? newImageUrls : [newImageUrl]);
+      setImageUrls(newImageUrls);
+      setActivePart('all');
     } catch (error: any) {
       console.error("Search error:", error);
       setApiError(true);
@@ -203,20 +215,28 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
     }
   };
 
-  const handleDeleteSavedSearch = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteSavedSearchClick = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const path = `saved_searches/${id}`;
+    setDeleteSearchId(id);
+  };
+
+  const confirmDeleteSavedSearch = async () => {
+    if (!deleteSearchId) return;
+    const path = `saved_searches/${deleteSearchId}`;
     try {
-      await deleteDoc(doc(db, 'saved_searches', id));
-      if (activeSavedSearch === id) {
+      await deleteDoc(doc(db, 'saved_searches', deleteSearchId));
+      if (activeSavedSearch === deleteSearchId) {
         setResult(null);
         setImageUrl(undefined);
-        setImageUrls([]);
+        setImageUrls({ all: [] });
         setSearchQuery('');
         setActiveSavedSearch(null);
       }
+      if (onShowMessage) onShowMessage("🗑️ Ricerca salvata eliminata.");
     } catch (error) {
       onFirestoreError(error, OperationType.DELETE, path);
+    } finally {
+      setDeleteSearchId(null);
     }
   };
 
@@ -225,7 +245,14 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
     setSearchQuery(saved.query);
     setResult(saved.result);
     setImageUrl(saved.imageUrl);
-    setImageUrls(saved.imageUrls || (saved.imageUrl ? [saved.imageUrl] : []));
+    
+    // Convert old array format to Record format for backward compatibility
+    if (Array.isArray(saved.imageUrls)) {
+      setImageUrls({ all: saved.imageUrls });
+    } else {
+      setImageUrls(saved.imageUrls || (saved.imageUrl ? { all: [saved.imageUrl] } : { all: [] }));
+    }
+    setActivePart('all');
     setActiveSavedSearch(saved.id);
     setSaveSuccess(false);
   };
@@ -443,31 +470,50 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
               </div>
               <div className="glass-card rounded-[2rem] shadow-xl border border-brand-100 overflow-hidden relative">
                 {imageUrl && (
-                  <div 
-                    className="w-full h-48 sm:h-64 overflow-hidden relative cursor-zoom-in group/img"
-                    onClick={() => setShowSlideshow(true)}
-                  >
-                    <img 
-                      src={imageUrl} 
-                      alt={searchQuery} 
-                      className="w-full h-full object-cover transition-transform group-hover/img:scale-105 duration-700"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute top-4 right-4 p-2 bg-white/20 backdrop-blur-md rounded-full text-white opacity-0 group-hover/img:opacity-100 transition-opacity">
-                      <Maximize2 size={20} />
+                  <div className="p-4 space-y-4">
+                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                      {Object.keys(imageUrls).map((part) => (
+                        <button
+                          key={part}
+                          onClick={() => setActivePart(part)}
+                          className={cn(
+                            "px-3 py-1 rounded-full text-xs font-bold capitalize whitespace-nowrap transition-colors",
+                            activePart === part ? "bg-brand-600 text-white" : "bg-brand-50 text-brand-600 hover:bg-brand-100"
+                          )}
+                        >
+                          {getLabel(part)}
+                        </button>
+                      ))}
                     </div>
-                    <div className="absolute bottom-4 left-6 text-white w-full pr-12">
-                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">
-                        {activeCategory === 'cultivable' ? 'Guida Coltivazione' : (imageUrl.includes('gbif.org') ? 'Galleria Botanica (GBIF)' : 'Visualizzazione Suggerita')}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-serif text-xl truncate">{searchQuery}</h4>
-                        {imageUrls.length > 1 && (
-                          <span className="text-[10px] bg-brand-500/80 px-2 py-0.5 rounded-full font-bold">+{imageUrls.length - 1} foto</span>
-                        )}
+                    {imageUrls[activePart] && imageUrls[activePart].length > 0 ? (
+                      <div 
+                        className="w-full h-48 sm:h-64 overflow-hidden relative cursor-zoom-in group/img rounded-2xl"
+                        onClick={() => setShowSlideshow(true)}
+                      >
+                        <img 
+                          src={imageUrls[activePart][0]} 
+                          alt={searchQuery} 
+                          className="w-full h-full object-cover transition-transform group-hover/img:scale-105 duration-700"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div className="absolute top-4 right-4 p-2 bg-white/20 backdrop-blur-md rounded-full text-white opacity-0 group-hover/img:opacity-100 transition-opacity">
+                          <Maximize2 size={20} />
+                        </div>
+                        <div className="absolute bottom-4 left-6 text-white w-full pr-12">
+                          <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">
+                            {activeCategory === 'cultivable' ? 'Guida Coltivazione' : `Visualizzazione: ${activePart === 'all' ? 'Vista Generale' : activePart}`}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-serif text-xl truncate">{searchQuery}</h4>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="w-full h-48 flex items-center justify-center bg-nature-50 rounded-2xl text-nature-400 italic text-sm">
+                        Nessuna immagine disponibile per questa parte.
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="p-8 prose prose-nature max-w-none relative">
@@ -554,14 +600,15 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
                           >
                             <Download size={18} />
                           </button>
-                          <div
-                            onClick={(e) => handleDeleteSavedSearch(saved.id, e)}
-                            className="p-2 text-nature-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                          <button
+                            onClick={(e) => handleDeleteSavedSearchClick(saved.id, e)}
+                            className="p-2 text-nature-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
                             title="Elimina"
+                            aria-label="Elimina ricerca salvata"
                           >
                             <Trash2 size={18} />
-                          </div>
-                          <ChevronRight className="text-nature-200 group-hover:text-nature-400 transition-colors" size={20} />
+                          </button>
+                          <ChevronRight className="text-nature-300 group-hover:text-nature-500 transition-colors shrink-0" size={20} />
                         </div>
                       </div>
                     ))}
@@ -579,7 +626,7 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
       </div>
 
       <Slideshow 
-        images={imageUrls}
+        images={imageUrls[activePart] || []}
         isOpen={showSlideshow}
         onClose={() => setShowSlideshow(false)}
         title={searchQuery}
@@ -603,7 +650,7 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
           </div>
 
           <div className="relative rounded-3xl overflow-hidden aspect-video shadow-lg bg-nature-100">
-            {imageUrl && <img src={imageUrl} alt={searchQuery} className="w-full h-full object-cover" />}
+            {imageUrl && <img src={imageUrl} alt={searchQuery} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
               <h2 className="text-2xl font-serif leading-tight">{searchQuery}</h2>
@@ -631,6 +678,16 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
         onConfirm={handleExecuteShare}
         onCancel={() => setPreviewImage(null)}
         isSharing={isSharing}
+      />
+
+      <ConfirmModal 
+        isOpen={!!deleteSearchId}
+        title="Elimina Ricerca"
+        message="Sei sicuro di voler eliminare questa ricerca salvata? Non sarà più disponibile offline."
+        onConfirm={confirmDeleteSavedSearch}
+        onCancel={() => setDeleteSearchId(null)}
+        confirmText="Elimina"
+        variant="danger"
       />
     </div>
   );
