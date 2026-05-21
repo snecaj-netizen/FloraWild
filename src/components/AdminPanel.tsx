@@ -19,6 +19,7 @@ interface UserProfile {
   id: string;
   email: string;
   role: 'admin' | 'user';
+  approved: boolean;
   createdAt: any;
 }
 
@@ -54,6 +55,18 @@ export const AdminPanel = ({ onBack, onShowMessage }: { onBack: () => void, onSh
         role: editRole
       });
       setEditingUserId(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleApproveUser = async (user: UserProfile) => {
+    const path = `users/${user.id}`;
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        approved: true
+      });
+      if (onShowMessage) onShowMessage("✅ Utente approvato!");
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -168,6 +181,14 @@ export const AdminPanel = ({ onBack, onShowMessage }: { onBack: () => void, onSh
                 </div>
 
                 <div className="flex items-center justify-end gap-3 border-t sm:border-t-0 pt-4 sm:pt-0">
+                  {!user.approved && (
+                    <button
+                      onClick={() => handleApproveUser(user)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors"
+                    >
+                      <Check size={14} /> Approva
+                    </button>
+                  )}
                   {editingUserId === user.id ? (
                     <>
                       <button

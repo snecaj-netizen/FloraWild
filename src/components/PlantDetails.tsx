@@ -27,6 +27,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [shareWithoutImage, setShareWithoutImage] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [feedback, setFeedback] = useState('');
   
@@ -116,6 +117,11 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
     if (!cardRef.current) return;
     
     setIsGenerating(true);
+    setShareWithoutImage(false); // Reset and try with image first
+    
+    // Allow state to flush to DOM
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    
     try {
       const dataUrl = await htmlToImage.toPng(cardRef.current, {
         quality: 0.95,
@@ -127,9 +133,27 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
       });
       setPreviewImage(dataUrl);
     } catch (err) {
-      console.error("Error generating preview:", err);
-      if (onShowMessage) onShowMessage("❌ Errore durante la creazione dell'anteprima.");
-      else alert("Errore durante la creazione dell'anteprima.");
+      console.warn("CORS/Image error when generating preview, retrying with beautiful text gradient:", err);
+      setShareWithoutImage(true);
+      
+      // Allow state to flush to DOM
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      
+      try {
+        const dataUrlFallback = await htmlToImage.toPng(cardRef.current, {
+          quality: 0.95,
+          backgroundColor: '#f8fafc',
+          style: {
+            borderRadius: '0',
+            transform: 'scale(1)',
+          }
+        });
+        setPreviewImage(dataUrlFallback);
+      } catch (fallbackErr) {
+        console.error("Fallback preview generation failed:", fallbackErr);
+        if (onShowMessage) onShowMessage("❌ Errore durante la creazione dell'anteprima.");
+        else alert("Errore durante la creazione dell'anteprima.");
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -191,12 +215,25 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
               <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Identificazione {theme.label}</p>
             </div>
           </div>
-          <div className="relative rounded-3xl overflow-hidden aspect-square shadow-lg">
-            <img src={imageUrl} alt={plant.name} className="w-full h-full object-cover" />
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent text-white">
-              <h2 className="text-2xl font-serif leading-tight">{plant.name}</h2>
-              <p className="text-xs italic opacity-80">{plant.scientificName}</p>
-            </div>
+          <div className="relative rounded-3xl overflow-hidden aspect-square shadow-lg flex items-center justify-center bg-nature-100">
+            {imageUrl && !shareWithoutImage ? (
+              <>
+                <img src={imageUrl} alt={plant.name} className="w-full h-full object-cover" />
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent text-white">
+                  <h2 className="text-2xl font-serif leading-tight">{plant.name}</h2>
+                  <p className="text-xs italic opacity-85">{plant.scientificName}</p>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-brand-600 to-emerald-800 flex flex-col items-center justify-center p-6 text-center text-white relative">
+                <Sparkles className="text-white/40 mb-2" size={36} />
+                <span className="text-xs font-bold uppercase tracking-widest text-emerald-200">FloraWild Identificazione</span>
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent text-white text-left">
+                  <h2 className="text-2xl font-serif leading-tight">{plant.name}</h2>
+                  <p className="text-xs italic opacity-85">{plant.scientificName}</p>
+                </div>
+              </div>
+            )}
           </div>
           <div className="space-y-4">
             <div className={cn("p-4 rounded-2xl flex items-center gap-3", plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")}>

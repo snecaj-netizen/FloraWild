@@ -22,7 +22,7 @@ import {
   signIn, 
   signUp, 
   logout, 
-  getUserRole,
+  getUserProfile,
   resetPassword,
   changePassword 
 } from './firebase';
@@ -101,7 +101,10 @@ const IdentificationStatus = ({ isIdentifying, category, onCancel }: { isIdentif
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isApproved, setIsApproved] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [publicSearchQuery, setPublicSearchQuery] = useState<string | null>(null);
+  const [publicSharedId, setPublicSharedId] = useState<string | null>(null);
   
   // Login form state
   const [email, setEmail] = useState('');
@@ -118,6 +121,19 @@ export default function App() {
     }
     return 'home';
   });
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    const sid = params.get('sid');
+    if (q) {
+      setPublicSearchQuery(q);
+    }
+    if (sid) {
+      setPublicSharedId(sid);
+    }
+  }, []);
+
   const [plants, setPlants] = useState<Plant[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -293,11 +309,13 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
-        const role = await getUserRole(user.uid, user.email);
-        setIsAdmin(role === 'admin');
+        const profile = await getUserProfile(user.uid, user.email);
+        setIsAdmin(profile.role === 'admin');
+        setIsApproved(profile.approved);
       } else {
         setUser(null);
         setIsAdmin(false);
+        setIsApproved(false);
       }
       setIsAuthReady(true);
     });
@@ -716,6 +734,26 @@ export default function App() {
   }
 
   if (!user) {
+    if (publicSearchQuery || publicSharedId) {
+      return (
+        <div className="min-h-screen bg-slate-50 p-6">
+          <Search
+            user={null}
+            onFirestoreError={handleFirestoreError}
+            initialQuery={publicSearchQuery || undefined}
+            initialSid={publicSharedId || undefined}
+            onBack={() => { setPublicSearchQuery(null); setPublicSharedId(null); }}
+            savedSearches={[]}
+            isPublic={true}
+            onLoginClick={() => {
+              setPublicSearchQuery(null);
+              setPublicSharedId(null);
+              setIsSigningUp(false);
+            }}
+          />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">

@@ -42,6 +42,7 @@ export const signUp = async (email: string, password: string) => {
     await setDoc(doc(db, 'users', result.user.uid), {
       email,
       role: email === ADMIN_EMAIL ? 'admin' : 'user',
+      approved: email === ADMIN_EMAIL,
       createdAt: serverTimestamp()
     });
 
@@ -77,7 +78,7 @@ export const changePassword = async (password: string) => {
   }
 };
 
-export const getUserRole = async (uid: string, email?: string | null) => {
+export const getUserProfile = async (uid: string, email?: string | null) => {
   const userDocRef = doc(db, 'users', uid);
   const userDoc = await getDoc(userDocRef);
   
@@ -85,10 +86,12 @@ export const getUserRole = async (uid: string, email?: string | null) => {
     const data = userDoc.data();
     // Force admin role for the specific email if it's not set correctly
     if (email === ADMIN_EMAIL && data.role !== 'admin') {
-      await updateDoc(userDocRef, { role: 'admin' });
-      return 'admin';
+      await updateDoc(userDocRef, { role: 'admin', approved: true });
+      return { role: 'admin', approved: true };
     }
-    return data.role;
+    // Existing users without approved field default to approved: true
+    const approved = data.approved === undefined ? true : data.approved;
+    return { role: data.role, approved };
   }
 
   // If doc doesn't exist but it's the admin email, create it
@@ -96,10 +99,11 @@ export const getUserRole = async (uid: string, email?: string | null) => {
     await setDoc(userDocRef, {
       email,
       role: 'admin',
+      approved: true,
       createdAt: serverTimestamp()
     });
-    return 'admin';
+    return { role: 'admin', approved: true };
   }
   
-  return 'user';
+  return { role: 'user', approved: false };
 };

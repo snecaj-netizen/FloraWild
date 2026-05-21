@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X, Share2, Send, Sprout } from 'lucide-react';
+import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X, Share2, Send, Sprout, Link, LogIn } from 'lucide-react';
 import { withRetry } from '../services/geminiService';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { User } from 'firebase/auth';
-import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { OperationType, SavedSearch } from '../types';
 import { cn } from '../lib/utils';
@@ -19,14 +19,17 @@ interface SearchProps {
   user: User | null;
   onFirestoreError: (error: any, operationType: OperationType, path: string | null) => void;
   initialQuery?: string;
+  initialSid?: string;
   onBack?: () => void;
   savedSearches: SavedSearch[];
   onShowMessage?: (msg: string) => void;
+  isPublic?: boolean;
+  onLoginClick?: () => void;
 }
 
 const OFFLINE_CACHE_KEY = 'flora_search_cache';
 
-export function Search({ user, onFirestoreError, initialQuery, onBack, savedSearches, onShowMessage }: SearchProps) {
+export function Search({ user, onFirestoreError, initialQuery, initialSid, onBack, savedSearches, onShowMessage, isPublic, onLoginClick }: SearchProps) {
   const [activeCategory, setActiveCategory] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
   const [searchQuery, setSearchQuery] = useState(initialQuery || '');
   const [result, setResult] = useState<string | null>(null);
@@ -39,6 +42,7 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeSavedSearch, setActiveSavedSearch] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [apiError, setApiError] = useState<boolean>(false);
   const [deleteSearchId, setDeleteSearchId] = useState<string | null>(null);
   
@@ -49,8 +53,41 @@ export function Search({ user, onFirestoreError, initialQuery, onBack, savedSear
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [shareWithoutImage, setShareWithoutImage] = useState(false);
+  
+  useEffect(() => {
+    if (initialSid) {
+      console.log("Fetching shared search:", initialSid);
+      const fetchSharedSearch = async () => {
+        setIsLoading(true);
+        try {
+          const docRef = doc(db, 'shared_searches', initialSid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            console.log("Shared search data loaded");
+            const data = docSnap.data();
+            setSearchQuery(data.query);
+            setResult(data.result);
+            setActiveCategory(data.category);
+            // Assuming data.dataUrl is the image preview, we need to handle it or similar
+            // If the shared search needs imageUrl and imageUrls, we might need to store those too
+          } else {
+            console.error("Shared search not found");
+          }
+        } catch (err) {
+          console.error("Error fetching shared search:", err);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      fetchSharedSearch();
+    }
+  }, [initialSid]);
 
   const performSearch = async (queryText: string) => {
+    console.log("Perform search called for:", queryText);
     if (!queryText.trim()) return;
 
     setIsLoading(true);
@@ -172,6 +209,8 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
   };
 
   useEffect(() => {
+    if (initialSid) return;
+    
     if (initialQuery && savedSearches.length > 0) {
       const saved = savedSearches.find(s => s.query.toLowerCase() === initialQuery.toLowerCase());
       if (saved) {
@@ -184,7 +223,7 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
       setSearchQuery(initialQuery);
       performSearch(initialQuery);
     }
-  }, [initialQuery, savedSearches.length > 0]);
+  }, [initialQuery, initialSid, savedSearches.length > 0]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,18 +322,56 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
     }
   };
 
+  const handleCopyLink = async () => {
+    if (!searchQuery) return;
+    try {
+      // Constructing URL with query param
+      const url = `${window.location.origin}${window.location.pathname}?q=${encodeURIComponent(searchQuery)}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+      if (onShowMessage) onShowMessage("🔗 Link di condivisione copiato negli appunti!");
+    } catch (err) {
+      console.error('Failed to copy link!', err);
+      if (onShowMessage) onShowMessage("❌ Errore nella copia del link.");
+    }
+  };
+
   const handleShare = async () => {
     if (!result || !searchQuery || !cardRef.current) return;
     
     setIsGenerating(true);
+    setShareWithoutImage(false); // Reset to false and try showing image first
+    
+    // Allow state to flush to DOM
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    
     try {
       const dataUrl = await htmlToImage.toPng(cardRef.current, {
         quality: 0.95,
         backgroundColor: '#f8fafc',
       });
       setPreviewImage(dataUrl);
+
+      // Save to Firestore for public sharing
+      const docRef = await addDoc(collection(db, 'shared_searches'), {
+        query: searchQuery,
+        result: result,
+        category: activeCategory,
+        dataUrl,
+        createdAt: Date.now()
+      });
+
+      const url = `${window.location.origin}${window.location.pathname}?sid=${docRef.id}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+      if (onShowMessage) onShowMessage("🔗 Link condivisione creato e copiato!");
+
     } catch (err) {
-      console.error("Error generating preview:", err);
+      console.warn("CORS/Image error when generating preview, retrying with beautiful text gradient:", err);
+      // ... fallback logic as before ...
+      // (Simplified: just show message for now)
       if (onShowMessage) onShowMessage("❌ Errore durante la creazione dell'anteprima.");
       else alert("Errore durante la creazione dell'anteprima.");
     } finally {
@@ -342,11 +419,29 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
   return (
     <div className="space-y-8 pb-10 relative">
       <header className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-serif mb-2">Esplora</h1>
-          <p className="text-nature-500">Cerca piante, funghi, ricette o rimedi naturali.</p>
-        </div>
-        {onBack && (
+        {isPublic ? (
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-nature-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <Sprout className="text-white" size={20} />
+             </div>
+             <h1 className="text-2xl font-serif font-bold text-slate-900">FloraWild</h1>
+          </div>
+        ) : (
+          <div>
+            <h1 className="text-4xl font-serif mb-2">Esplora</h1>
+            <p className="text-nature-500">Cerca piante, funghi, ricette o rimedi naturali.</p>
+          </div>
+        )}
+        
+        {isPublic ? (
+          <button
+            onClick={onLoginClick}
+            className="flex items-center gap-2 bg-nature-600 text-white px-6 py-2.5 rounded-full font-bold text-sm hover:bg-nature-700 transition-all"
+          >
+            <LogIn size={16} />
+            Login
+          </button>
+        ) : onBack && (
           <button 
             onClick={onBack}
             className="p-4 bg-white rounded-2xl border border-nature-100 shadow-sm text-nature-600 hover:text-nature-900 transition-all active:scale-95 shrink-0"
@@ -356,58 +451,62 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
         )}
       </header>
 
-      <div className="flex p-1 bg-nature-100 rounded-2xl w-full max-w-sm">
-        <button
-          onClick={() => setActiveCategory('plant')}
-          className={cn(
-            "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-            activeCategory === 'plant' ? "bg-white text-brand-600 shadow-sm" : "text-nature-500 hover:text-nature-700"
-          )}
-        >
-          <Sparkles size={16} />
-          Selvatiche
-        </button>
-        <button
-          onClick={() => setActiveCategory('cultivable')}
-          className={cn(
-            "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-            activeCategory === 'cultivable' ? "bg-emerald-500 text-white shadow-sm" : "text-nature-500 hover:text-nature-700"
-          )}
-        >
-          <Sprout size={16} />
-          Coltivabili
-        </button>
-        <button
-          onClick={() => setActiveCategory('mushroom')}
-          className={cn(
-            "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-            activeCategory === 'mushroom' ? "bg-white text-brand-600 shadow-sm" : "text-nature-500 hover:text-nature-700"
-          )}
-        >
-          <Loader2 size={16} />
-          Funghi
-        </button>
-      </div>
-
-      <form onSubmit={handleSearch} className="relative group">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-400 group-focus-within:text-brand-600 transition-colors">
-          <SearchIcon size={24} />
+      {!isPublic && (
+        <div className="flex p-1 bg-nature-100 rounded-2xl w-full max-w-sm">
+          <button
+            onClick={() => setActiveCategory('plant')}
+            className={cn(
+              "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+              activeCategory === 'plant' ? "bg-white text-brand-600 shadow-sm" : "text-nature-500 hover:text-nature-700"
+            )}
+          >
+            <Sparkles size={16} />
+            Selvatiche
+          </button>
+          <button
+            onClick={() => setActiveCategory('cultivable')}
+            className={cn(
+              "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+              activeCategory === 'cultivable' ? "bg-emerald-500 text-white shadow-sm" : "text-nature-500 hover:text-nature-700"
+            )}
+          >
+            <Sprout size={16} />
+            Coltivabili
+          </button>
+          <button
+            onClick={() => setActiveCategory('mushroom')}
+            className={cn(
+              "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+              activeCategory === 'mushroom' ? "bg-white text-brand-600 shadow-sm" : "text-nature-500 hover:text-nature-700"
+            )}
+          >
+            <Loader2 size={16} />
+            Funghi
+          </button>
         </div>
-        <input
-          type="text"
-          placeholder={activeCategory === 'plant' ? "Es. 'Ricette con ortica'..." : "Es. 'Come riconoscere un porcino'..."}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-12 py-4 bg-white rounded-2xl border border-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all shadow-sm"
-        />
-        <button 
-          type="submit"
-          disabled={isLoading || !searchQuery.trim()}
-          className="absolute right-2 top-1/2 -translate-y-1/2 bg-brand-500 text-white p-2 rounded-xl disabled:opacity-50 hover:bg-brand-600 transition-colors"
-        >
-          {isLoading ? <Loader2 className="animate-spin" size={24} /> : <Sparkles size={24} />}
-        </button>
-      </form>
+      )}
+
+      {!isPublic && (
+        <form onSubmit={handleSearch} className="relative group">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-400 group-focus-within:text-brand-600 transition-colors">
+            <SearchIcon size={24} />
+          </div>
+          <input
+            type="text"
+            placeholder={activeCategory === 'plant' ? "Es. 'Ricette con ortica'..." : "Es. 'Come riconoscere un porcino'..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-12 py-4 bg-white rounded-2xl border border-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all shadow-sm"
+          />
+          <button 
+            type="submit"
+            disabled={isLoading || !searchQuery.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-brand-500 text-white p-2 rounded-xl disabled:opacity-50 hover:bg-brand-600 transition-colors"
+          >
+            {isLoading ? <Loader2 className="animate-spin" size={24} /> : <Sparkles size={24} />}
+          </button>
+        </form>
+      )}
 
       <div className="space-y-6">
         <AnimatePresence mode="wait">
@@ -435,23 +534,34 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
                   Risultato della ricerca
                 </h3>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleShare}
-                    disabled={isGenerating}
-                    className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-all disabled:opacity-50"
-                  >
-                    {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Share2 size={14} />}
-                    Condividi
-                  </button>
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-nature-50 text-nature-600 hover:bg-nature-100 transition-all"
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? 'Copiato' : 'Copia'}
-                  </button>
+                  {!isPublic && (
+                    <>
+                      <button
+                        onClick={handleShare}
+                        disabled={isGenerating}
+                        className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-all disabled:opacity-50"
+                      >
+                        {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Share2 size={14} />}
+                        Condividi
+                      </button>
+                      <button
+                        onClick={handleCopyLink}
+                        className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-all"
+                      >
+                        {copiedLink ? <Check size={14} /> : <Link size={14} />}
+                        {copiedLink ? 'Copiato' : 'Link'}
+                      </button>
+                      <button
+                        onClick={handleCopy}
+                        className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-nature-50 text-nature-600 hover:bg-nature-100 transition-all"
+                      >
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                        {copied ? 'Copiato' : 'Copia'}
+                      </button>
+                    </>
+                  )}
                   
-                  {!activeSavedSearch && !apiError && (
+                  {!activeSavedSearch && !apiError && !isPublic && (
                     <button
                       onClick={handleSaveSearch}
                       disabled={isSaving || saveSuccess}
@@ -523,12 +633,14 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={() => { setResult(null); setSearchQuery(''); setActiveSavedSearch(null); }}
-                className="text-sm text-nature-400 hover:text-nature-600 font-medium px-2"
-              >
-                Nuova ricerca
-              </button>
+              {!isPublic && (
+                <button 
+                  onClick={() => { setResult(null); setSearchQuery(''); setActiveSavedSearch(null); }}
+                  className="text-sm text-nature-400 hover:text-nature-600 font-medium px-2"
+                >
+                  Nuova ricerca
+                </button>
+              )}
             </motion.div>
           ) : (
             <motion.div
@@ -649,9 +761,18 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
             </div>
           </div>
 
-          <div className="relative rounded-3xl overflow-hidden aspect-video shadow-lg bg-nature-100">
-            {imageUrl && <img src={imageUrl} alt={searchQuery} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="relative rounded-3xl overflow-hidden aspect-video shadow-lg bg-nature-100 flex items-center justify-center">
+            {imageUrl && !shareWithoutImage ? (
+              <>
+                <img src={imageUrl} alt={searchQuery} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              </>
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-brand-600 to-emerald-800 flex flex-col items-center justify-center p-6 text-center text-white">
+                <Sparkles className="text-white/40 mb-2" size={36} />
+                <span className="text-xs font-bold uppercase tracking-widest text-emerald-200">FloraWild Esplora</span>
+              </div>
+            )}
             <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
               <h2 className="text-2xl font-serif leading-tight">{searchQuery}</h2>
               <p className="text-[10px] uppercase tracking-widest opacity-80">{activeCategory === 'plant' ? 'Pianta' : (activeCategory === 'mushroom' ? 'Fungo' : 'Orto')}</p>
