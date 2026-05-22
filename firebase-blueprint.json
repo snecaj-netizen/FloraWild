@@ -44,6 +44,21 @@
         "createdAt": { "type": "number", "description": "Registration timestamp" }
       },
       "required": ["email", "role", "createdAt"]
+    },
+    "SharedSearch": {
+      "title": "SharedSearch",
+      "description": "A search result saved specifically for sharing publicly by link",
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "The search query" },
+        "category": { "type": "string", "enum": ["plant", "mushroom", "cultivable"], "description": "Category search performed" },
+        "result": { "type": "string", "description": "The markdown result from Gemini" },
+        "imageUrl": { "type": "string", "description": "URL of the representative image" },
+        "imageUrls": { "type": "object", "description": "Multiple image URLs categorized by part" },
+        "dataUrl": { "type": "string", "description": "Data URL of the generated image snapshot" },
+        "createdAt": { "type": "number", "description": "Creation timestamp" }
+      },
+      "required": ["query", "result", "category", "createdAt"]
     }
   },
   "firestore": {
@@ -54,6 +69,10 @@
     "/saved_searches/{searchId}": {
       "schema": "SavedSearch",
       "description": "Collection of saved search results"
+    },
+    "/shared_searches/{searchId}": {
+      "schema": "SharedSearch",
+      "description": "Collection of search results shared publicly via link"
     },
     "/users/{userId}": {
       "schema": "User",

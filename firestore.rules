@@ -70,6 +70,16 @@ service cloud.firestore {
              data.userId == request.auth.uid;
     }
 
+    function isValidSharedSearch(data) {
+      return data.query is string && data.query.size() >= 1 && data.query.size() <= 1000 &&
+             data.category in ['plant', 'mushroom', 'cultivable'] &&
+             data.result is string && data.result.size() >= 1 && data.result.size() <= 1048576 &&
+             (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() < 2097152)) &&
+             (!('imageUrls' in data) || data.imageUrls == null || (data.imageUrls is map)) &&
+             (!('dataUrl' in data) || data.dataUrl == null || (data.dataUrl is string && data.dataUrl.size() < 2097152)) &&
+             data.createdAt is number;
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -117,6 +127,12 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
       
       allow update: if false; // Searches are usually immutable in this app
+    }
+
+    match /shared_searches/{searchId} {
+      allow get: if true; // Accessible by non-authenticated public users using the share link
+      allow create: if isSignedIn() && isValidSharedSearch(incoming());
+      allow delete, update: if isAdmin();
     }
   }
 }

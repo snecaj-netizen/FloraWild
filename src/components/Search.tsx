@@ -70,8 +70,9 @@ export function Search({ user, onFirestoreError, initialQuery, initialSid, onBac
             setSearchQuery(data.query);
             setResult(data.result);
             setActiveCategory(data.category);
-            // Assuming data.dataUrl is the image preview, we need to handle it or similar
-            // If the shared search needs imageUrl and imageUrls, we might need to store those too
+            if (data.imageUrl) setImageUrl(data.imageUrl);
+            if (data.imageUrls) setImageUrls(data.imageUrls);
+            if (data.dataUrl) setPreviewImage(data.dataUrl);
           } else {
             console.error("Shared search not found");
           }
@@ -323,10 +324,22 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
   };
 
   const handleCopyLink = async () => {
-    if (!searchQuery) return;
+    if (!searchQuery || !result) return;
     try {
-      // Constructing URL with query param
-      const url = `${window.location.origin}${window.location.pathname}?q=${encodeURIComponent(searchQuery)}`;
+      let qid = initialSid;
+      if (!qid) {
+        const docRef = await addDoc(collection(db, 'shared_searches'), {
+          query: searchQuery,
+          result: result,
+          category: activeCategory,
+          imageUrl: imageUrl || null,
+          imageUrls: imageUrls || null,
+          createdAt: Date.now()
+        });
+        qid = docRef.id;
+      }
+
+      const url = `${window.location.origin}${window.location.pathname}?sid=${qid}`;
       await navigator.clipboard.writeText(url);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
@@ -353,16 +366,22 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
       });
       setPreviewImage(dataUrl);
 
-      // Save to Firestore for public sharing
-      const docRef = await addDoc(collection(db, 'shared_searches'), {
-        query: searchQuery,
-        result: result,
-        category: activeCategory,
-        dataUrl,
-        createdAt: Date.now()
-      });
+      let qid = initialSid;
+      if (!qid) {
+        // Save to Firestore for public sharing
+        const docRef = await addDoc(collection(db, 'shared_searches'), {
+          query: searchQuery,
+          result: result,
+          category: activeCategory,
+          imageUrl: imageUrl || null,
+          imageUrls: imageUrls || null,
+          dataUrl,
+          createdAt: Date.now()
+        });
+        qid = docRef.id;
+      }
 
-      const url = `${window.location.origin}${window.location.pathname}?sid=${docRef.id}`;
+      const url = `${window.location.origin}${window.location.pathname}?sid=${qid}`;
       await navigator.clipboard.writeText(url);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
@@ -370,8 +389,6 @@ Questo può accadere se sei offline o se c'è un problema temporaneo con il serv
 
     } catch (err) {
       console.warn("CORS/Image error when generating preview, retrying with beautiful text gradient:", err);
-      // ... fallback logic as before ...
-      // (Simplified: just show message for now)
       if (onShowMessage) onShowMessage("❌ Errore durante la creazione dell'anteprima.");
       else alert("Errore durante la creazione dell'anteprima.");
     } finally {
