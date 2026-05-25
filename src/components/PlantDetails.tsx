@@ -9,7 +9,7 @@ import { SharePreviewModal } from './SharePreviewModal';
 import { Slideshow } from './Slideshow';
 
 interface PlantDetailsProps {
-  plant: PlantIdentification & { id?: string; isFavorite?: boolean };
+  plant: PlantIdentification & { id?: string; isFavorite?: boolean; notes?: string };
   imageUrl: string;
   onSave: () => void;
   onBack: () => void;
@@ -21,9 +21,10 @@ interface PlantDetailsProps {
   isSaving?: boolean;
   isSaved?: boolean;
   onToggleFavorite?: (id: string) => void;
+  onUpdateNotes?: (id: string, notes: string) => void;
 }
 
-export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, onShowMessage, isSaving, isSaved, onToggleFavorite }: PlantDetailsProps) {
+export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, onShowMessage, isSaving, isSaved, onToggleFavorite, onUpdateNotes }: PlantDetailsProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -31,6 +32,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
   const [shareWithoutImage, setShareWithoutImage] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [notes, setNotes] = useState(plant.notes || '');
   
   // Botanical Gallery State
   const [galleryImages, setGalleryImages] = useState<Record<string, string[]>>({});
@@ -571,6 +573,17 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
             </p>
           </section>
         )}
+
+        <section className="p-6">
+          <h3 className="text-lg font-serif mb-2">Note personali</h3>
+          <textarea 
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={() => plant.id && onUpdateNotes?.(plant.id, notes)}
+            placeholder="Aggiungi una nota privata..."
+            className="w-full p-3 rounded-xl border border-nature-200 text-sm min-h-[100px] focus:ring-2 focus:ring-brand-500"
+          />
+        </section>
 
         <section className="p-6">
           <h3 className="text-lg font-serif mb-2">Descrizione</h3>

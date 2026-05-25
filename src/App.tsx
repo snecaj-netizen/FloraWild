@@ -768,6 +768,15 @@ export default function App() {
     }
   };
 
+  const handleUpdateNotesPlant = async (id: string, notes: string) => {
+    setPlants(prev => prev.map(p => p.id === id ? { ...p, notes } : p));
+    try {
+      await updateDoc(doc(db, 'plants', id), { notes });
+    } catch (error) {
+      console.error("Error updating notes:", error);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteId) return;
     const path = `plants/${deleteId}`;
@@ -1181,6 +1190,7 @@ export default function App() {
                   plant={(identifiedPlant || {}) as any}
                   imageUrl={capturedImage}
                   onToggleFavorite={handleToggleFavoritePlant}
+                  onUpdateNotes={handleUpdateNotesPlant}
                   onSave={handleSavePlant}
                   onBack={() => window.history.back()}
                   onClose={() => navigateTo('home')}

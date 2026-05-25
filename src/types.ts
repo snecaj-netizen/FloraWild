@@ -31,6 +31,7 @@ export interface Plant {
   createdAt: number;
   userId: string;
   isFavorite?: boolean;
+  notes?: string;
 }
 
 export interface PlantIdentification {
