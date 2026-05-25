@@ -14,7 +14,8 @@ import {
   deleteDoc, 
   doc, 
   orderBy,
-  getDocFromServer
+  getDocFromServer,
+  updateDoc
 } from 'firebase/firestore';
 import { 
   auth, 
@@ -736,6 +737,37 @@ export default function App() {
     setDeleteId(id);
   };
 
+  const handleToggleFavoritePlant = async (id: string) => {
+    const plant = plants.find(p => p.id === id);
+    if (!plant) return;
+    const newFavoriteStatus = !plant.isFavorite;
+    
+    setPlants(prev => prev.map(p => p.id === id ? { ...p, isFavorite: newFavoriteStatus } : p));
+    
+    try {
+      await updateDoc(doc(db, 'plants', id), { isFavorite: newFavoriteStatus });
+    } catch (error) {
+      console.error("Error updating favorite:", error);
+      // Revert if error
+      setPlants(prev => prev.map(p => p.id === id ? { ...p, isFavorite: plant.isFavorite } : p));
+    }
+  };
+
+  const handleToggleFavoriteSearch = async (id: string) => {
+    const search = savedSearches.find(s => s.id === id);
+    if (!search) return;
+    const newFavoriteStatus = !search.isFavorite;
+    
+    setSavedSearches(prev => prev.map(s => s.id === id ? { ...s, isFavorite: newFavoriteStatus } : s));
+    
+    try {
+      await updateDoc(doc(db, 'saved_searches', id), { isFavorite: newFavoriteStatus });
+    } catch (error) {
+       console.error("Error updating favorite:", error);
+       setSavedSearches(prev => prev.map(s => s.id === id ? { ...s, isFavorite: search.isFavorite } : s));
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteId) return;
     const path = `plants/${deleteId}`;
@@ -1090,6 +1122,7 @@ export default function App() {
               }}
               onDelete={handleDeletePlant}
               onShare={handleSharePlantInList}
+              onToggleFavorite={handleToggleFavoritePlant}
               isSharing={isGeneratingShare}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -1145,8 +1178,9 @@ export default function App() {
                 />
               ) : identifiedPlant && capturedImage ? (
                 <PlantDetails 
-                  plant={identifiedPlant}
+                  plant={(identifiedPlant || {}) as any}
                   imageUrl={capturedImage}
+                  onToggleFavorite={handleToggleFavoritePlant}
                   onSave={handleSavePlant}
                   onBack={() => window.history.back()}
                   onClose={() => navigateTo('home')}

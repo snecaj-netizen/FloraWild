@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight, WifiOff, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
+import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight, WifiOff, RefreshCw, Trash2, AlertTriangle, Heart } from 'lucide-react';
 import { SavedSearch, Plant, QueuedIdentification } from '../types';
 import { cn } from '../lib/utils';
 
@@ -14,6 +14,7 @@ interface HomeProps {
   isProcessingQueue?: boolean;
   onProcessQueue?: () => void;
   onClearQueue?: () => void;
+  onToggleFavoriteSearch?: (id: string) => void;
 }
 
 export function Home({ 
@@ -26,7 +27,8 @@ export function Home({
   offlineQueue = [],
   isProcessingQueue = false,
   onProcessQueue,
-  onClearQueue
+  onClearQueue,
+  onToggleFavoriteSearch
 }: HomeProps) {
   const recentSearches = savedSearches.slice(0, 3);
   const displayPlants = recentPlants.slice(0, 3);
@@ -203,12 +205,11 @@ export function Home({
           {recentSearches.length > 0 ? (
             <div className="space-y-3">
               {recentSearches.map((saved) => (
-                <button
+                <div
                   key={saved.id}
-                  onClick={() => onGoToSearch(saved.query)}
                   className="w-full p-3 bg-white rounded-2xl border border-nature-100 shadow-sm flex items-center justify-between group hover:bg-nature-50 transition-all text-left"
                 >
-                  <div className="flex items-center gap-3 overflow-hidden">
+                  <button onClick={() => onGoToSearch(saved.query)} className="flex items-center gap-3 overflow-hidden flex-1">
                     <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-nature-100 bg-nature-50">
                       {saved.imageUrl ? (
                         <img 
@@ -227,9 +228,17 @@ export function Home({
                       <span className="text-nature-800 font-bold truncate pr-2">{saved.query}</span>
                       <span className="text-[10px] text-nature-400 uppercase font-bold tracking-tight">Rileggi analisi salvata</span>
                     </div>
+                  </button>
+                  <div className="flex gap-2 items-center">
+                    <button
+                        onClick={() => onToggleFavoriteSearch?.(saved.id)}
+                        className={cn("p-2 transition-colors", saved.isFavorite ? "text-rose-500" : "text-nature-300 hover:text-rose-500")}
+                    >
+                        <Heart size={18} className={saved.isFavorite ? 'fill-rose-500' : ''} />
+                    </button>
+                    <ChevronRight className="text-nature-300 group-hover:text-nature-500 transition-colors shrink-0" size={18} />
                   </div>
-                  <ChevronRight className="text-nature-300 group-hover:text-nature-500 transition-colors shrink-0" size={18} />
-                </button>
+                </div>
               ))}
             </div>
           ) : !displayPlants.length && (

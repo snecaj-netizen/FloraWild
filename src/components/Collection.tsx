@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, Trash2, ExternalLink, Leaf, Loader2, Share2, Sprout } from 'lucide-react';
+import { Search, Trash2, ExternalLink, Leaf, Loader2, Share2, Sprout, Heart } from 'lucide-react';
 import { Plant } from '../types';
 import { cn } from '../lib/utils';
 
@@ -9,28 +9,36 @@ interface CollectionProps {
   onSelect: (plant: Plant) => void;
   onDelete: (id: string) => void;
   onShare: (plant: Plant) => void;
+  onToggleFavorite: (id: string) => void;
   isSharing: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
 }
 
-export function Collection({ plants, onSelect, onDelete, onShare, isSharing, searchQuery, onSearchChange }: CollectionProps) {
-  const [activeTab, setActiveTab] = useState<'plant' | 'mushroom' | 'cultivable'>('plant');
+export function Collection({ plants, onSelect, onDelete, onShare, onToggleFavorite, isSharing, searchQuery, onSearchChange }: CollectionProps) {
+  const [activeTab, setActiveTab] = useState<'plant' | 'mushroom' | 'cultivable' | 'favorite'>('plant');
 
   const filteredPlants = plants.filter(p => {
-    const categoryMatch = (p.category || 'plant') === activeTab;
+    let categoryMatch = false;
+    if (activeTab === 'favorite') {
+      categoryMatch = !!p.isFavorite;
+    } else {
+      categoryMatch = (p.category || 'plant') === activeTab;
+    }
     const searchMatch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                        p.scientificName.toLowerCase().includes(searchQuery.toLowerCase());
     return categoryMatch && searchMatch;
   });
 
   const getHeaderText = () => {
+    if (activeTab === 'favorite') return 'Le tue preferite';
     if (activeTab === 'plant') return 'Le piante selvatiche';
     if (activeTab === 'mushroom') return 'I funghi';
     return 'Le tue piante coltivabili';
   };
 
   const getEmptyStateText = () => {
+    if (activeTab === 'favorite') return 'pianta preferita';
     if (activeTab === 'plant') return 'risultato botanico selvatico';
     if (activeTab === 'mushroom') return 'risultato micologico';
     return 'pianta da orto';
@@ -43,11 +51,11 @@ export function Collection({ plants, onSelect, onDelete, onShare, isSharing, sea
         <p className="text-nature-500">{getHeaderText()} che hai scoperto e salvato.</p>
       </header>
 
-      <div className="flex p-1 bg-nature-100 rounded-2xl w-full gap-1">
+      <div className="flex p-1 bg-nature-100 rounded-2xl w-full gap-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('plant')}
           className={cn(
-            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5",
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 whitespace-nowrap",
             activeTab === 'plant' ? "bg-white text-brand-600 shadow-sm" : "text-nature-400 hover:text-nature-700"
           )}
         >
@@ -57,7 +65,7 @@ export function Collection({ plants, onSelect, onDelete, onShare, isSharing, sea
         <button
           onClick={() => setActiveTab('cultivable')}
           className={cn(
-            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5",
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 whitespace-nowrap",
             activeTab === 'cultivable' ? "bg-emerald-500 text-white shadow-sm" : "text-nature-400 hover:text-nature-700"
           )}
         >
@@ -67,12 +75,22 @@ export function Collection({ plants, onSelect, onDelete, onShare, isSharing, sea
         <button
           onClick={() => setActiveTab('mushroom')}
           className={cn(
-            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5",
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 whitespace-nowrap",
             activeTab === 'mushroom' ? "bg-white text-brand-600 shadow-sm" : "text-nature-400 hover:text-nature-700"
           )}
         >
           <Loader2 size={14} />
           Funghi
+        </button>
+        <button
+          onClick={() => setActiveTab('favorite')}
+          className={cn(
+            "flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 whitespace-nowrap",
+            activeTab === 'favorite' ? "bg-rose-500 text-white shadow-sm" : "text-nature-400 hover:text-nature-700"
+          )}
+        >
+          <Heart size={14} className={activeTab === 'favorite' ? 'fill-white' : ''} />
+          Preferiti
         </button>
       </div>
 
@@ -113,6 +131,13 @@ export function Collection({ plants, onSelect, onDelete, onShare, isSharing, sea
                     {plant.isEdible ? 'Commestibile' : 'Non Commestibile'}
                   </span>
                   <div className="flex gap-2">
+                    <button 
+                      onClick={() => onToggleFavorite(plant.id)}
+                      className={cn("p-2 transition-colors", plant.isFavorite ? "text-rose-500" : "text-nature-300 hover:text-rose-500")}
+                      title="Preferiti"
+                    >
+                      <Heart size={18} className={plant.isFavorite ? 'fill-rose-500' : ''} />
+                    </button>
                     <button 
                       onClick={() => onShare(plant)}
                       disabled={isSharing}

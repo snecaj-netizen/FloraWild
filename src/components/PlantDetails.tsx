@@ -9,7 +9,7 @@ import { SharePreviewModal } from './SharePreviewModal';
 import { Slideshow } from './Slideshow';
 
 interface PlantDetailsProps {
-  plant: PlantIdentification;
+  plant: PlantIdentification & { id?: string; isFavorite?: boolean };
   imageUrl: string;
   onSave: () => void;
   onBack: () => void;
@@ -20,9 +20,10 @@ interface PlantDetailsProps {
   onShowMessage?: (msg: string) => void;
   isSaving?: boolean;
   isSaved?: boolean;
+  onToggleFavorite?: (id: string) => void;
 }
 
-export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, onShowMessage, isSaving, isSaved }: PlantDetailsProps) {
+export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo, onRefine, onSearchQuery, onShowMessage, isSaving, isSaved, onToggleFavorite }: PlantDetailsProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -329,6 +330,12 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
           </button>
           <button onClick={onSave} disabled={isSaving || isSaved} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all", isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100")}>
             {isSaved ? <Check size={24} /> : <Save size={24} />}
+          </button>
+          <button 
+             onClick={() => onToggleFavorite?.(plant.id)}
+             className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border border-nature-200", plant.isFavorite ? "bg-rose-50 border-rose-200" : "bg-white hover:bg-nature-50")}
+          >
+             <Heart size={24} className={cn(plant.isFavorite ? "text-rose-500 fill-rose-500" : "text-nature-400")} />
           </button>
         </div>
       </div>

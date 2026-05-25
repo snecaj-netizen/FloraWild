@@ -30,6 +30,7 @@ export interface Plant {
   location?: { lat: number; lng: number };
   createdAt: number;
   userId: string;
+  isFavorite?: boolean;
 }
 
 export interface PlantIdentification {
@@ -98,6 +99,7 @@ export interface SavedSearch {
   imageUrls?: string[];
   createdAt: number;
   userId: string;
+  isFavorite?: boolean;
 }
 
 export interface QueuedIdentification {
