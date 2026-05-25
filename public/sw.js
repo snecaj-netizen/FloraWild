@@ -20,6 +20,11 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Bypass service worker interception for API calls (to avoid issues with large POST payloads)
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
   // Network-first approach during dev/troubleshooting
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
