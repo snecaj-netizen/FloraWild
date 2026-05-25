@@ -493,7 +493,7 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
           ) : Object.keys(galleryImages).length > 0 ? (
             <>
               <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
-                {Object.keys(galleryImages).map((part) => (
+                {Object.keys(galleryImages).filter(part => galleryImages[part].length > 0).map((part) => (
                   <button
                     key={part}
                     onClick={() => setActivePart(part)}
