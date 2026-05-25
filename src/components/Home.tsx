@@ -113,7 +113,7 @@ export function Home({
         </div>
         <div className="space-y-1">
           <h1 className="text-5xl font-serif font-bold text-nature-900">FloraWild</h1>
-          <p className="text-nature-500 italic">Piante selvatiche e funghi: scopri la natura</p>
+          <p className="text-nature-500 italic">Piante selvatiche, coltivabili e funghi: scopri la natura</p>
         </div>
       </header>
 
