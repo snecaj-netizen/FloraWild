@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X, Sprout, Calendar, Droplets, Sun, MoveRight, Layers } from 'lucide-react';
-import { PlantIdentification } from '../services/geminiService';
+import { Check, AlertTriangle, Utensils, Heart, Save, ArrowLeft, Info, RefreshCw, Share2, Copy, Sparkles, Loader2, Image as ImageIcon, ExternalLink, Search, Maximize2, X, Sprout, Calendar, Droplets, Sun, MoveRight, Layers } from 'lucide-react';
+import { PlantIdentification } from '../types';
 import { cn } from '../lib/utils';
 import * as htmlToImage from 'html-to-image';
 
@@ -320,6 +320,12 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
         <div className="flex gap-2">
           <button onClick={generatePreview} disabled={isGenerating} className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all disabled:opacity-50">
             {isGenerating ? <Loader2 className="animate-spin" size={24} /> : <Share2 size={24} />}
+          </button>
+          <button onClick={() => {
+            navigator.clipboard.writeText(window.location.href);
+            if (onShowMessage) onShowMessage("✅ Link copiato!");
+          }} className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all">
+            <Copy size={24} className="opacity-50" />
           </button>
           <button onClick={onSave} disabled={isSaving || isSaved} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all", isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100")}>
             {isSaved ? <Check size={24} /> : <Save size={24} />}

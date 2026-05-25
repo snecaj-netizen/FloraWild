@@ -1,33 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-
-export interface PlantIdentification {
-  name: string;
-  scientificName: string;
-  category: 'plant' | 'mushroom' | 'cultivable';
-  isEdible: boolean;
-  edibilityDetails: string;
-  culinaryUses: { title: string; recipeLink: string }[];
-  phytotherapyUses: { title: string; recipeLink: string }[];
-  description: string;
-  botanicalDetails?: {
-    leaf?: string;
-    flower?: string;
-    fruit?: string;
-    stem?: string;
-    habitat?: string;
-  };
-  gardeningDetails?: {
-    sowingTime: string;
-    plantingTime: string;
-    sunExposure: string;
-    watering: string;
-    soilPreference: string;
-    harvestTime: string;
-    spacing: string;
-  };
-  recognitionTips: { text: string; imageSearchTerm: string }[];
-  warning?: string;
-}
+import { PlantIdentification } from "../types";
 
 export async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
   try {
@@ -60,16 +32,16 @@ export async function identifyPlant(
   subjectPart: string = 'Soggetto intero', 
   feedback?: string
 ): Promise<PlantIdentification> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
   
   if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
-    throw new Error("La chiave API Gemini non è valida. Assicurati di averla inserita correttamente nelle impostazioni del progetto.");
+    throw new Error("La chiave API Gemini non è valida.");
   }
 
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey });
     
-    // Using gemini-flash-latest as recommended by SKILL.md
+    // Using gemini-flash-latest as recommended by SKILL.md for basic text tasks
     const model = "gemini-flash-latest";
     
     let expertType = "pianta o albero selvatico";
@@ -105,7 +77,7 @@ export async function identifyPlant(
         - plantingTime: quando trapiantare/impiantare (mesi)
         - sunExposure: esposizione solare ideale (es. "Pieno sole", "Mezz'ombra")
         - watering: consigli su quando e quanto innaffiare
-        - soilPreference: tipo di terreno preferito
+        - soilPreference: tipo di terreno prioritario
         - harvestTime: quando raccogliere
         - spacing: distanza consigliata tra le piante`;
     }
@@ -115,8 +87,9 @@ export async function identifyPlant(
     
     Rispondi SOLO con il JSON.`;
 
+    console.log("Calling ai.models.generateContent...");
     const response = await ai.models.generateContent({
-      model: model || "gemini-flash-latest",
+      model: model,
       contents: {
         parts: [
           { text: prompt },
@@ -200,6 +173,7 @@ export async function identifyPlant(
         },
       },
     });
+    console.log("ai.models.generateContent completed.");
 
     const text = response.text;
     if (!text) throw new Error("Nessuna risposta ricevuta dal modello.");
@@ -210,5 +184,99 @@ export async function identifyPlant(
       console.error("JSON parse error:", text);
       throw new Error("Errore nel formato della risposta dell'IA.");
     }
+  });
+}
+
+export async function searchPlant(
+  queryText: string,
+  category: 'plant' | 'mushroom' | 'cultivable',
+  activeCategory: 'plant' | 'mushroom' | 'cultivable'
+): Promise<{ text: string; imageUrl?: string; imageUrls: Record<string, string[]> }> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  
+  if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
+    throw new Error("La chiave API Gemini non è valida.");
+  }
+
+  return withRetry(async () => {
+    const ai = new GoogleGenAI({ apiKey });
+    
+    const getExpertRole = () => {
+      if (activeCategory === 'plant') return "un esperto di botanica, cucina selvatica e fitoterapia";
+      if (activeCategory === 'mushroom') return "un micologo esperto, conoscitore di funghi commestibili e velenosi";
+      return "un agronomo esperto, conoscitore di piante da orto, frutteto e giardino";
+    };
+
+    const getTopic = () => {
+      if (activeCategory === 'plant') return "piante selvatiche, ricette o usi medicinali";
+      if (activeCategory === 'mushroom') return "funghi, commestibilità, pericoli e habitat";
+      return "piante coltivate, ortaggi, alberi da frutto, tecniche di coltivazione e consigli per l'orto";
+    };
+
+    const prompt = `Sei ${getExpertRole()}. 
+     Rispondi alla seguente domanda o ricerca: "${queryText}".
+     Fornisci informazioni su ${getTopic()}.
+     Usa un tono professionale ma appassionato. Formatta la risposta in Markdown.
+     Inoltre, alla fine della tua risposta, aggiungi DUE righe con questo formato ESATTO: 
+     LATIN_NAME: [nome scientifico in latino della specie principale se applicabile, altrimenti scrivi N/A]
+     IMAGE_KEYWORD: [una singola parola chiave in inglese per la ricerca immagini se LATIN_NAME è N/A]`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
+    
+    let text = response.text || '';
+    let keyword = 'nature';
+    let latinName = '';
+    
+    const latinMatch = text.match(/LATIN_NAME:\s*([^\n\r]+)/);
+    if (latinMatch) {
+      latinName = latinMatch[1].trim();
+      text = text.replace(/LATIN_NAME:\s*[^\n\r]+/, '').trim();
+    }
+
+    const keywordMatch = text.match(/IMAGE_KEYWORD:\s*(\w+)/);
+    if (keywordMatch) {
+      keyword = keywordMatch[1].toLowerCase();
+      text = text.replace(/IMAGE_KEYWORD:\s*\w+/, '').trim();
+    }
+
+    let imageUrl = `https://loremflickr.com/800/600/wild,nature,${keyword}/all`;
+    let imageUrls: Record<string, string[]> = { all: [] };
+
+    if (latinName && latinName !== 'N/A') {
+      try {
+        const parts = ['all', 'leaf', 'flower', 'fruit', 'stem'];
+        
+        for (const part of parts) {
+          const query = part === 'all' ? latinName : `${latinName} ${part}`;
+          const gbifRes = await fetch(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(query)}&mediaType=StillImage&limit=4`);
+          const gbifData = await gbifRes.json();
+          
+          const partImages: string[] = [];
+          if (gbifData.results && gbifData.results.length > 0) {
+            gbifData.results.forEach((res: any) => {
+              if (res.media) {
+                res.media.forEach((m: any) => {
+                  if (m.identifier && m.type === 'StillImage') {
+                    partImages.push(m.identifier);
+                  }
+                });
+              }
+            });
+          }
+          imageUrls[part] = Array.from(new Set(partImages));
+        }
+        
+        if (imageUrls.all.length > 0) {
+          imageUrl = imageUrls.all[0];
+        }
+      } catch (err) {
+        console.error("GBIF fetch error:", err);
+      }
+    }
+
+    return { text: text.trim() || "Nessun risultato trovato.", imageUrl, imageUrls };
   });
 }

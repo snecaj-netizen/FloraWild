@@ -43,6 +43,7 @@ export const signUp = async (email: string, password: string) => {
       email,
       role: email === ADMIN_EMAIL ? 'admin' : 'user',
       approved: email === ADMIN_EMAIL,
+      blocked: false,
       createdAt: serverTimestamp()
     });
 
@@ -86,12 +87,13 @@ export const getUserProfile = async (uid: string, email?: string | null) => {
     const data = userDoc.data();
     // Force admin role for the specific email if it's not set correctly
     if (email === ADMIN_EMAIL && data.role !== 'admin') {
-      await updateDoc(userDocRef, { role: 'admin', approved: true });
-      return { role: 'admin', approved: true };
+      await updateDoc(userDocRef, { role: 'admin', approved: true, blocked: false });
+      return { role: 'admin', approved: true, blocked: false };
     }
     // Existing users without approved field default to approved: true
     const approved = data.approved === undefined ? true : data.approved;
-    return { role: data.role, approved };
+    const blocked = data.blocked === true;
+    return { role: data.role, approved, blocked };
   }
 
   // If doc doesn't exist but it's the admin email, create it
@@ -100,10 +102,11 @@ export const getUserProfile = async (uid: string, email?: string | null) => {
       email,
       role: 'admin',
       approved: true,
+      blocked: false,
       createdAt: serverTimestamp()
     });
-    return { role: 'admin', approved: true };
+    return { role: 'admin', approved: true, blocked: false };
   }
   
-  return { role: 'user', approved: false };
+  return { role: 'user', approved: false, blocked: false };
 };

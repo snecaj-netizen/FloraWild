@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search as SearchIcon, Utensils, Heart, Loader2, Sparkles, Save, Trash2, Clock, Check, ChevronRight, Download, Copy, FileText, WifiOff, Maximize2, X, Share2, Send, Sprout, Link, LogIn } from 'lucide-react';
-import { withRetry } from '../services/geminiService';
-import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { User } from 'firebase/auth';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, getDoc, getDocs } from 'firebase/firestore';
@@ -100,97 +98,21 @@ export function Search({ user, onFirestoreError, initialQuery, initialSid, onBac
     setApiError(false);
 
     try {
-      let apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (apiKey) apiKey = apiKey.trim();
-      
-      if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
-        setResult("Errore: Chiave API Gemini non trovata o non valida.");
-        return;
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const getExpertRole = () => {
-        if (activeCategory === 'plant') return "un esperto di botanica, cucina selvatica e fitoterapia";
-        if (activeCategory === 'mushroom') return "un micologo esperto, conoscitore di funghi commestibili e velenosi";
-        return "un agronomo esperto, conoscitore di piante da orto, frutteto e giardino";
-      };
-
-      const getTopic = () => {
-        if (activeCategory === 'plant') return "piante selvatiche, ricette o usi medicinali";
-        if (activeCategory === 'mushroom') return "funghi, commestibilità, pericoli e habitat";
-        return "piante coltivate, ortaggi, alberi da frutto, tecniche di coltivazione e consigli per l'orto";
-      };
-
-      const prompt = `Sei ${getExpertRole()}. 
-       Rispondi alla seguente domanda o ricerca: "${queryText}".
-       Fornisci informazioni su ${getTopic()}.
-       Usa un tono professionale ma appassionato. Formatta la risposta in Markdown.
-       Inoltre, alla fine della tua risposta, aggiungi DUE righe con questo formato ESATTO: 
-       LATIN_NAME: [nome scientifico in latino della specie principale se applicabile, altrimenti scrivi N/A]
-       IMAGE_KEYWORD: [una singola parola chiave in inglese per la ricerca immagini se LATIN_NAME è N/A]`;
-
-      const response = await withRetry(async () => {
-        return await ai.models.generateContent({
-          model: "gemini-flash-latest",
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        });
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queryText, category: activeCategory, activeCategory: activeCategory })
       });
       
-      let text = response.text || '';
-      let keyword = 'nature';
-      let latinName = '';
-      
-      const latinMatch = text.match(/LATIN_NAME:\s*([^\n\r]+)/);
-      if (latinMatch) {
-        latinName = latinMatch[1].trim();
-        text = text.replace(/LATIN_NAME:\s*[^\n\r]+/, '').trim();
-      }
-
-      const keywordMatch = text.match(/IMAGE_KEYWORD:\s*(\w+)/);
-      if (keywordMatch) {
-        keyword = keywordMatch[1].toLowerCase();
-        text = text.replace(/IMAGE_KEYWORD:\s*\w+/, '').trim();
-      }
-
-      setResult(text.trim() || "Nessun risultato trovato.");
-      
-      let newImageUrl = `https://loremflickr.com/800/600/wild,nature,${keyword}/all`;
-      let newImageUrls: Record<string, string[]> = { all: [] };
-
-      if (latinName && latinName !== 'N/A') {
-        try {
-          const parts = ['all', 'leaf', 'flower', 'fruit', 'stem'];
-          
-          for (const part of parts) {
-            const query = part === 'all' ? latinName : `${latinName} ${part}`;
-            const gbifRes = await fetch(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(query)}&mediaType=StillImage&limit=4`);
-            const gbifData = await gbifRes.json();
-            
-            const partImages: string[] = [];
-            if (gbifData.results && gbifData.results.length > 0) {
-              gbifData.results.forEach((res: any) => {
-                if (res.media) {
-                  res.media.forEach((m: any) => {
-                    if (m.identifier && m.type === 'StillImage') {
-                      partImages.push(m.identifier);
-                    }
-                  });
-                }
-              });
-            }
-            newImageUrls[part] = Array.from(new Set(partImages));
-          }
-          
-          if (newImageUrls.all.length > 0) {
-            newImageUrl = newImageUrls.all[0];
-          }
-        } catch (err) {
-          console.error("GBIF fetch error:", err);
-        }
+      if (!response.ok) {
+        throw new Error('Search failed');
       }
       
-      setImageUrl(newImageUrl);
-      setImageUrls(newImageUrls);
+      const data = await response.json();
+      
+      setResult(data.text);
+      setImageUrl(data.imageUrl);
+      setImageUrls(data.imageUrls);
       setActivePart('all');
     } catch (error: any) {
       console.error("Search error:", error);

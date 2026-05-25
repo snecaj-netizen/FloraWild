@@ -38,8 +38,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PasswordChangeModal } from './components/PasswordChangeModal';
 import { SharePreviewModal } from './components/SharePreviewModal';
-import { Plant, View, OperationType, SavedSearch, QueuedIdentification } from './types';
-import { identifyPlant, PlantIdentification } from './services/geminiService';
+import { Plant, View, OperationType, SavedSearch, QueuedIdentification, PlantIdentification } from './types';
 import { offlineService } from './services/offlineService';
 import { compressImage } from './lib/imageUtils';
 import { Loader2, LogIn, Leaf, Shield, User as UserIcon, Mail, Lock, AlertCircle, Eye, EyeOff, Edit2, ChevronRight, Check, Sprout, Share2, Sparkles, AlertTriangle, X, WifiOff, RefreshCw } from 'lucide-react';
@@ -102,6 +101,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [publicSearchQuery, setPublicSearchQuery] = useState<string | null>(null);
   const [publicSharedId, setPublicSharedId] = useState<string | null>(null);
@@ -175,6 +175,33 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineQueue, setOfflineQueue] = useState<QueuedIdentification[]>([]);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+
+  const fetchIdentifyPlant = async (base64Image: string, category: 'plant' | 'mushroom' | 'cultivable', part: string, feedback?: string): Promise<PlantIdentification> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+    
+    try {
+      const response = await fetch('/api/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Image, category, subjectPart: part, feedback }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Errore identificazione');
+      }
+      return await response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('La richiesta ha richiesto troppo tempo. Riprova più tardi.');
+      }
+      throw error;
+    }
+  };
 
   // Navigation with History API support
   const navigateTo = (view: View, push = true) => {
@@ -306,20 +333,57 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubscribeProfile: (() => void) | null = null;
+    
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+      
       if (user) {
         setUser(user);
-        const profile = await getUserProfile(user.uid, user.email);
-        setIsAdmin(profile.role === 'admin');
-        setIsApproved(profile.approved);
+        
+        // Real-time listener for user profile changes
+        const userDocRef = doc(db, 'users', user.uid);
+        unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const isAdminUser = data.role === 'admin' || user.email === 'snecaj@gmail.com';
+            setIsAdmin(isAdminUser);
+            setIsApproved(data.approved === undefined ? true : data.approved);
+            setIsBlocked(data.blocked === true);
+          } else {
+            // Profile doesn't exist yet, fetch once to let getUserProfile bootstrap if needed.
+            getUserProfile(user.uid, user.email).then((profile) => {
+              setIsAdmin(profile.role === 'admin');
+              setIsApproved(profile.approved);
+              setIsBlocked(profile.blocked === true);
+            });
+          }
+          setIsAuthReady(true);
+        }, (error) => {
+          console.error("Error listening to user profile:", error);
+          getUserProfile(user.uid, user.email).then((profile) => {
+            setIsAdmin(profile.role === 'admin');
+            setIsApproved(profile.approved);
+            setIsBlocked(profile.blocked === true);
+            setIsAuthReady(true);
+          });
+        });
       } else {
         setUser(null);
         setIsAdmin(false);
         setIsApproved(false);
+        setIsBlocked(false);
+        setIsAuthReady(true);
       }
-      setIsAuthReady(true);
     });
-    return () => unsubscribe();
+    
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   useEffect(() => {
@@ -464,7 +528,7 @@ export default function App() {
           
           // Use the stored image directly if possible, or compress once
           // item.image is already b64. Let's ensure it's a valid b64 for identifyPlant
-          const result = await identifyPlant(item.image, item.category, item.part);
+          const result = await fetchIdentifyPlant(item.image, item.category, item.part);
           console.log(`Identification successful for ${item.id}:`, result.name);
           
           if (user) {
@@ -549,7 +613,7 @@ export default function App() {
     
     try {
       const compressedForAi = await compressImage(base64Image, 1024, 1024, 0.7);
-      const result = await identifyPlant(compressedForAi, category, part);
+      const result = await fetchIdentifyPlant(compressedForAi, category, part);
       setIdentifiedPlant(result);
     } catch (error: any) {
       console.error("Identification failed:", error);
@@ -570,7 +634,7 @@ export default function App() {
     
     try {
       const compressedForAi = await compressImage(capturedImage, 1024, 1024, 0.7);
-      const result = await identifyPlant(compressedForAi, identifiedPlant?.category || 'plant', lastPart, feedback);
+      const result = await fetchIdentifyPlant(compressedForAi, identifiedPlant?.category || 'plant', lastPart, feedback);
       setIdentifiedPlant(result);
     } catch (error: any) {
       console.error("Refinement failed:", error);
@@ -849,6 +913,56 @@ export default function App() {
     );
   }
 
+  if (user && isBlocked) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 animate-in fade-in duration-300">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden text-center p-8 space-y-6">
+          <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto animate-bounce">
+            <AlertCircle size={40} />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-serif font-bold text-slate-900">Account Bloccato</h1>
+            <p className="text-sm text-slate-500 font-medium px-4">
+              Il tuo account è stato sospeso o bloccato dall'amministratore. Contatta il supporto se ritieni si tratti di un errore.
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-colors flex items-center justify-center gap-2"
+          >
+            <LogIn size={18} className="rotate-180" />
+            Esci dall'account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (user && !isApproved && !isAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 animate-in fade-in duration-300">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden text-center p-8 space-y-6">
+          <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+            <Lock size={40} className="animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-serif font-bold text-slate-900">In Attesa di Approvazione</h1>
+            <p className="text-sm text-slate-500 font-medium px-4">
+              La tua registrazione è andata a buon fine! Un amministratore deve approvare il tuo account prima che tu possa accedere alle funzionalità di FloraWild.
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-colors flex items-center justify-center gap-2"
+          >
+            <LogIn size={18} className="rotate-180" />
+            Esci dall'account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Layout>
       <div className="relative min-h-screen">
@@ -1013,7 +1127,7 @@ export default function App() {
             <div className="relative">
               {/* Force a close button even during identification */}
               <button 
-                onClick={() => navigateTo(previousView || 'home')}
+                onClick={() => navigateTo('home')}
                 className="fixed top-4 right-4 z-[120] p-3 bg-white/90 backdrop-blur-md rounded-full shadow-xl border border-nature-100 text-nature-600 hover:text-nature-900 transition-all active:scale-95 flex items-center justify-center"
                 aria-label="Chiudi"
               >

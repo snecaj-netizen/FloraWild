@@ -9,7 +9,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Shield, User, Trash2, Mail, Calendar, ArrowLeft, Edit2, Check, X } from 'lucide-react';
+import { Shield, User, Trash2, Mail, Calendar, ArrowLeft, Edit2, Check, X, Ban } from 'lucide-react';
 import { handleFirestoreError } from '../lib/utils';
 import { OperationType } from '../types';
 import { ConfirmModal } from './ConfirmModal';
@@ -20,6 +20,7 @@ interface UserProfile {
   email: string;
   role: 'admin' | 'user';
   approved: boolean;
+  blocked?: boolean;
   createdAt: any;
 }
 
@@ -67,6 +68,25 @@ export const AdminPanel = ({ onBack, onShowMessage }: { onBack: () => void, onSh
         approved: true
       });
       if (onShowMessage) onShowMessage("✅ Utente approvato!");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleToggleBlock = async (user: UserProfile) => {
+    if (user.id === auth.currentUser?.uid) {
+      if (onShowMessage) onShowMessage("⚠️ Non puoi bloccare te stesso!");
+      return;
+    }
+    const path = `users/${user.id}`;
+    const newBlockedState = !user.blocked;
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        blocked: newBlockedState
+      });
+      if (onShowMessage) {
+        onShowMessage(newBlockedState ? "🚫 Utente bloccato!" : "✅ Utente sbloccato!");
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -166,6 +186,11 @@ export const AdminPanel = ({ onBack, onShowMessage }: { onBack: () => void, onSh
                               Admin
                             </span>
                           )}
+                          {user.blocked && (
+                            <span className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              Bloccato
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                           <span className="flex items-center gap-1">
@@ -187,6 +212,26 @@ export const AdminPanel = ({ onBack, onShowMessage }: { onBack: () => void, onSh
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors"
                     >
                       <Check size={14} /> Approva
+                    </button>
+                  )}
+                  {user.id !== auth.currentUser?.uid && (
+                    <button
+                      onClick={() => handleToggleBlock(user)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        user.blocked 
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 animate-pulse' 
+                          : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                      }`}
+                    >
+                      {user.blocked ? (
+                        <>
+                          <Check size={14} /> Sblocca
+                        </>
+                      ) : (
+                        <>
+                          <Ban size={14} /> Blocca
+                        </>
+                      )}
                     </button>
                   )}
                   {editingUserId === user.id ? (

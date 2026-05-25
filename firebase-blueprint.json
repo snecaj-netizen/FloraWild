@@ -41,6 +41,8 @@
       "properties": {
         "email": { "type": "string", "description": "User email" },
         "role": { "type": "string", "enum": ["admin", "user"], "description": "User role: admin or user" },
+        "approved": { "type": "boolean", "description": "True if user is approved by administrator" },
+        "blocked": { "type": "boolean", "description": "True if user is blocked/banned by administrator" },
         "createdAt": { "type": "number", "description": "Registration timestamp" }
       },
       "required": ["email", "role", "createdAt"]

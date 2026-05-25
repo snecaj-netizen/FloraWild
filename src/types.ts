@@ -8,6 +8,13 @@ export interface Plant {
   culinaryUses: { title: string; recipeLink: string }[];
   phytotherapyUses: { title: string; recipeLink: string }[];
   description: string;
+  botanicalDetails?: {
+    leaf?: string;
+    flower?: string;
+    fruit?: string;
+    stem?: string;
+    habitat?: string;
+  };
   gardeningDetails?: {
     sowingTime: string;
     plantingTime: string;
@@ -23,6 +30,35 @@ export interface Plant {
   location?: { lat: number; lng: number };
   createdAt: number;
   userId: string;
+}
+
+export interface PlantIdentification {
+  name: string;
+  scientificName: string;
+  category: 'plant' | 'mushroom' | 'cultivable';
+  isEdible: boolean;
+  edibilityDetails: string;
+  culinaryUses: { title: string; recipeLink: string }[];
+  phytotherapyUses: { title: string; recipeLink: string }[];
+  description: string;
+  botanicalDetails?: {
+    leaf?: string;
+    flower?: string;
+    fruit?: string;
+    stem?: string;
+    habitat?: string;
+  };
+  gardeningDetails?: {
+    sowingTime: string;
+    plantingTime: string;
+    sunExposure: string;
+    watering: string;
+    soilPreference: string;
+    harvestTime: string;
+    spacing: string;
+  };
+  recognitionTips: { text: string; imageSearchTerm: string }[];
+  warning?: string;
 }
 
 export type View = 'home' | 'camera' | 'collection' | 'map' | 'search' | 'details' | 'admin';

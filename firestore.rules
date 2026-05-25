@@ -48,6 +48,8 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.email is string && data.email.size() >= 5 && data.email.size() <= 200 &&
              data.role in ['admin', 'user'] &&
+             (!('approved' in data) || data.approved is bool) &&
+             (!('blocked' in data) || data.blocked is bool) &&
              (data.createdAt is timestamp || data.createdAt is number); // Match what setDoc/serverTimestamp sends
     }
 
@@ -92,12 +94,14 @@ service cloud.firestore {
                        isValidUser(incoming()) && 
                        incoming().role == 'user' && // Self-assigned admin blocked
                        incoming().keys().hasAll(['email', 'role', 'createdAt']) &&
-                       incoming().keys().size() == 3;
+                       incoming().keys().size() <= 5;
       
       allow update: if (isAdmin() && isValidUser(incoming())) || (
         isOwner(userId) && 
         isValidUser(incoming()) && 
         incoming().role == existing().role && // Role cannot be changed by user
+        (!('approved' in incoming()) || incoming().approved == existing().approved) && // approved cannot be changed by user
+        (!('blocked' in incoming()) || incoming().blocked == existing().blocked) && // blocked cannot be changed by user
         incoming().diff(existing()).affectedKeys().hasOnly(['email', 'createdAt']) // Only specified fields
       );
 
