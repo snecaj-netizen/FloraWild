@@ -1,28 +1,38 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PlantIdentification } from "../types";
 
-export async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, retries = 5, delay = 2000): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
     if (retries <= 1) throw error;
     
-    // Only retry on potential transient errors (500, network errors, etc.)
-    const errorMessage = error?.message || "";
-    const statusCode = error?.code || 0;
+    const errorMessage = error?.message || String(error);
+    const statusCode = error?.status || error?.code || error?.statusCode || 0;
+    const errorStr = (typeof error === 'object' ? JSON.stringify(error) : String(error)).toUpperCase();
     
+    // Identify common transient errors that can be solved by retrying
     const isTransient = 
-      errorMessage.includes("500") || 
-      errorMessage.includes("xhr error") || 
-      errorMessage.includes("UNKNOWN") ||
+      statusCode === 503 ||
+      statusCode === 429 ||
       statusCode === 500 ||
-      statusCode === 503;
+      errorStr.includes("503") ||
+      errorStr.includes("429") ||
+      errorStr.includes("500") ||
+      errorStr.includes("UNAVAILABLE") ||
+      errorStr.includes("HIGH DEMAND") ||
+      errorStr.includes("TEMPORARY") ||
+      errorStr.includes("RESOURCE_EXHAUSTED") ||
+      errorStr.includes("LIMIT") ||
+      errorStr.includes("BUSY") ||
+      errorStr.includes("XHR ERROR") || 
+      errorStr.includes("UNKNOWN");
 
     if (!isTransient) throw error;
 
-    console.warn(`Transient error, retrying in ${delay}ms... (${retries - 1} retries left)`, error);
+    console.warn(`[Gemini Service] Transient error detected. Retrying in ${delay}ms... (${retries - 1} retries left). Error:`, errorMessage);
     await new Promise(resolve => setTimeout(resolve, delay));
-    return withRetry(fn, retries - 1, delay * 2);
+    return withRetry(fn, retries - 1, delay * 2.5); // Exponential backoff with higher multiplier
   }
 }
 
