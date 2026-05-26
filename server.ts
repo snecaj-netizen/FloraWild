@@ -7,9 +7,9 @@ import { Agent, setGlobalDispatcher } from "undici";
 
 // Configure Node's built-in global fetch dispatcher to increase timeouts and bypass HeadersTimeoutError
 setGlobalDispatcher(new Agent({
-  headersTimeout: 180000, // 3 minutes timeout for wait-on-headers to accommodate complex responses
-  bodyTimeout: 180000,    // 3 minutes timeout for response stream body chunks
-  connectTimeout: 60000   // 1 minute timeout for sockets connection establishment
+  headersTimeout: 60000, // 1 minute timeout for wait-on-headers to accommodate complex responses
+  bodyTimeout: 60000,    // 1 minute timeout for response stream body chunks
+  connectTimeout: 30000   // 30 seconds timeout for sockets connection establishment
 }));
 
 async function startServer() {
