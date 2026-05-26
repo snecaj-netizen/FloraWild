@@ -35,7 +35,7 @@ export async function identifyPlant(
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   
   if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
-    throw new Error("La chiave API Gemini non è valida.");
+    throw new Error("La chiave API Gemini (GEMINI_API_KEY) non è configurata o non è valida sul server. Se usi Railway, assicurati di aver aggiunto la variabile d'ambiente 'GEMINI_API_KEY' nelle impostazioni 'Variables' del tuo servizio.");
   }
 
   return withRetry(async () => {
@@ -195,7 +195,7 @@ export async function searchPlant(
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   
   if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
-    throw new Error("La chiave API Gemini non è valida.");
+    throw new Error("La chiave API Gemini (GEMINI_API_KEY) non è configurata o non è valida sul server. Se usi Railway, assicurati di aver aggiunto la variabile d'ambiente 'GEMINI_API_KEY' nelle impostazioni 'Variables' del tuo servizio.");
   }
 
   return withRetry(async () => {
