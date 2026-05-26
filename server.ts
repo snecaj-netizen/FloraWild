@@ -3,6 +3,14 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import * as geminiService from "./src/services/geminiService";
+import { Agent, setGlobalDispatcher } from "undici";
+
+// Configure Node's built-in global fetch dispatcher to increase timeouts and bypass HeadersTimeoutError
+setGlobalDispatcher(new Agent({
+  headersTimeout: 180000, // 3 minutes timeout for wait-on-headers to accommodate complex responses
+  bodyTimeout: 180000,    // 3 minutes timeout for response stream body chunks
+  connectTimeout: 60000   // 1 minute timeout for sockets connection establishment
+}));
 
 async function startServer() {
   const app = express();

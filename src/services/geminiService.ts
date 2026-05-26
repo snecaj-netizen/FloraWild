@@ -25,6 +25,10 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 15
       errorStr.includes("LIMIT") ||
       errorStr.includes("BUSY") ||
       errorStr.includes("XHR ERROR") || 
+      errorStr.includes("FETCH FAILED") ||
+      errorStr.includes("TIMEOUT") ||
+      errorStr.includes("UNDICI") ||
+      errorStr.includes("HEADERS TIMEOUT") ||
       errorStr.includes("UNKNOWN");
 
     if (!isTransient) throw error;
@@ -211,7 +215,9 @@ export async function identifyPlant(
           error?.status === 503 || error?.status === 429 ||
           errorStr.includes("503") || errorStr.includes("429") ||
           errorStr.includes("UNAVAILABLE") || errorStr.includes("HIGH DEMAND") ||
-          errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("LIMIT");
+          errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("LIMIT") ||
+          errorStr.includes("TIMEOUT") || errorStr.includes("FETCH FAILED") ||
+          errorStr.includes("UNDICI") || errorStr.includes("HEADERS TIMEOUT");
         
         if (isTransient) {
           activeModel = "gemini-3.1-flash-lite";
@@ -297,7 +303,9 @@ export async function searchPlant(
           error?.status === 503 || error?.status === 429 ||
           errorStr.includes("503") || errorStr.includes("429") ||
           errorStr.includes("UNAVAILABLE") || errorStr.includes("HIGH DEMAND") ||
-          errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("LIMIT");
+          errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("LIMIT") ||
+          errorStr.includes("TIMEOUT") || errorStr.includes("FETCH FAILED") ||
+          errorStr.includes("UNDICI") || errorStr.includes("HEADERS TIMEOUT");
         
         if (isTransient) {
           activeModel = "gemini-3.1-flash-lite";
