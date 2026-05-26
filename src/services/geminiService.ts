@@ -26,6 +26,12 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 20
   }
 }
 
+function getMaskedKey(key?: string): string {
+  if (!key) return "Nessuna chiave trovata (undefined/vuota)";
+  if (key.length < 10) return `Troppo corta (${key.length} caratteri)`;
+  return `${key.slice(0, 6)}...${key.slice(-4)} (lunghezza: ${key.length})`;
+}
+
 export async function identifyPlant(
   base64Image: string, 
   category: 'plant' | 'mushroom' | 'cultivable' = 'plant',
@@ -33,16 +39,19 @@ export async function identifyPlant(
   feedback?: string
 ): Promise<PlantIdentification> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const maskedKey = getMaskedKey(apiKey);
+  console.log(`[Gemini Service] Tentativo di identificazione con chiave: ${maskedKey}`);
   
-  if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
-    throw new Error("La chiave API Gemini (GEMINI_API_KEY) non è configurata o non è valida sul server. Se usi Railway, assicurati di aver aggiunto la variabile d'ambiente 'GEMINI_API_KEY' nelle impostazioni 'Variables' del tuo servizio.");
+  if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 15) {
+    throw new Error(`La chiave API Gemini (GEMINI_API_KEY) non è configurata o non è valida sul server. Chiave rilevata: ${maskedKey}. Se usi Railway, ricordati di inserire 'GEMINI_API_KEY' nelle variabili d'ambiente (Variables) ed effettuare un deploy.`);
   }
 
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // Using gemini-3.5-flash for reduced latency and high quality
-    const model = "gemini-3.5-flash";
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      
+      // Using gemini-3.5-flash for reduced latency and high quality
+      const model = "gemini-3.5-flash";
     
     let expertType = "pianta o albero selvatico";
     if (category === 'mushroom') expertType = "fungo";
@@ -184,6 +193,11 @@ export async function identifyPlant(
       console.error("JSON parse error:", text);
       throw new Error("Errore nel formato della risposta dell'IA.");
     }
+    } catch (error: any) {
+      console.error("[Gemini Service Error]", error);
+      const errMsg = error?.message || String(error);
+      throw new Error(`Errore di chiamata Gemini: ${errMsg}. Chiave applicata sul server: ${getMaskedKey(apiKey)}. Se ricevi un errore di chiave non valida o non abilitata, assicurati che la chiave sia corretta e di aver abilitato la 'Generative Language API' in Google Cloud Console per quel progetto.`);
+    }
   });
 }
 
@@ -193,13 +207,16 @@ export async function searchPlant(
   activeCategory: 'plant' | 'mushroom' | 'cultivable'
 ): Promise<{ text: string; imageUrl?: string; imageUrls: Record<string, string[]> }> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const maskedKey = getMaskedKey(apiKey);
+  console.log(`[Gemini Service] Tentativo di ricerca con chiave: ${maskedKey}`);
   
-  if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 20) {
-    throw new Error("La chiave API Gemini (GEMINI_API_KEY) non è configurata o non è valida sul server. Se usi Railway, assicurati di aver aggiunto la variabile d'ambiente 'GEMINI_API_KEY' nelle impostazioni 'Variables' del tuo servizio.");
+  if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 15) {
+    throw new Error(`La chiave API Gemini (GEMINI_API_KEY) non è configurata o non è valida sul server. Chiave rilevata: ${maskedKey}. Se usi Railway, ricordati di inserire 'GEMINI_API_KEY' nelle variabili d'ambiente (Variables) ed effettuare un deploy.`);
   }
 
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey });
+    try {
+      const ai = new GoogleGenAI({ apiKey });
     
     const getExpertRole = () => {
       if (activeCategory === 'plant') return "un esperto di botanica, cucina selvatica e fitoterapia";
@@ -278,5 +295,10 @@ export async function searchPlant(
     }
 
     return { text: text.trim() || "Nessun risultato trovato.", imageUrl, imageUrls };
+    } catch (error: any) {
+      console.error("[Gemini Service Search Error]", error);
+      const errMsg = error?.message || String(error);
+      throw new Error(`Errore di chiamata Gemini (Ricerca): ${errMsg}. Chiave applicata sul server: ${getMaskedKey(apiKey)}. Se ricevi un errore di chiave non valida o non abilitata, assicurati che la chiave sia corretta e di aver abilitato la 'Generative Language API' in Google Cloud Console per quel progetto.`);
+    }
   });
 }
