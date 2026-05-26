@@ -179,7 +179,7 @@ export default function App() {
 
   const fetchIdentifyPlant = async (base64Image: string, category: 'plant' | 'mushroom' | 'cultivable', part: string, feedback?: string): Promise<PlantIdentification> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout for spotty mobile networks
     
     try {
       const response = await fetch('/api/identify', {
@@ -198,7 +198,7 @@ export default function App() {
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error('La richiesta ha richiesto troppo tempo. Riprova più tardi.');
+        throw new Error("La richiesta di identificazione ha richiesto troppo tempo (connessione lenta o instabile). Puoi riprovare, oppure se la ricezione è scarsa, usa la modalità offline per salvare lo scatto in coda e sincronizzarlo quando avrai un segnale migliore!");
       }
       throw error;
     }
@@ -590,7 +590,7 @@ export default function App() {
 
     if (!isOnline) {
       // Compress BEFORE queuing to save IndexedDB space and improve reliability
-      const compressedForOffline = await compressImage(base64Image, 1200, 1200, 0.7);
+      const compressedForOffline = await compressImage(base64Image, 1024, 1024, 0.6);
       
       const queuedItem: QueuedIdentification = {
         id: Math.random().toString(36).substring(7),
@@ -613,7 +613,7 @@ export default function App() {
     navigateTo('details');
     
     try {
-      const compressedForAi = await compressImage(base64Image, 1024, 1024, 0.7);
+      const compressedForAi = await compressImage(base64Image, 800, 800, 0.5);
       const result = await fetchIdentifyPlant(compressedForAi, category, part);
       setIdentifiedPlant(result);
     } catch (error: any) {
@@ -634,7 +634,7 @@ export default function App() {
     setIdentifiedPlant(null);
     
     try {
-      const compressedForAi = await compressImage(capturedImage, 1024, 1024, 0.7);
+      const compressedForAi = await compressImage(capturedImage, 800, 800, 0.5);
       const result = await fetchIdentifyPlant(compressedForAi, identifiedPlant?.category || 'plant', lastPart, feedback);
       setIdentifiedPlant(result);
     } catch (error: any) {
@@ -652,7 +652,7 @@ export default function App() {
     setIsSaving(true);
     const path = 'plants';
     try {
-      const compressedImage = await compressImage(capturedImage, 1024, 1024, 0.6);
+      const compressedImage = await compressImage(capturedImage, 1024, 1024, 0.5);
       await addDoc(collection(db, path), {
         ...identifiedPlant,
         imageUrl: compressedImage,
