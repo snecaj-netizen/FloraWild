@@ -41,8 +41,8 @@ export async function identifyPlant(
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey });
     
-    // Using gemini-flash-latest as recommended by SKILL.md for basic text tasks
-    const model = "gemini-flash-latest";
+    // Using gemini-3.5-flash for reduced latency and high quality
+    const model = "gemini-3.5-flash";
     
     let expertType = "pianta o albero selvatico";
     if (category === 'mushroom') expertType = "fungo";
@@ -222,7 +222,7 @@ export async function searchPlant(
      IMAGE_KEYWORD: [una singola parola chiave in inglese per la ricerca immagini se LATIN_NAME è N/A]`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
     

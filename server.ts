@@ -9,6 +9,12 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
+  // Prevent sw.js caching so service worker updates are instant in PWA
+  app.get("/sw.js", (req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    next();
+  });
+
   // API routes
   app.post("/api/identify", async (req, res) => {
     try {

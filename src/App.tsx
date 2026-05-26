@@ -179,7 +179,7 @@ export default function App() {
 
   const fetchIdentifyPlant = async (base64Image: string, category: 'plant' | 'mushroom' | 'cultivable', part: string, feedback?: string): Promise<PlantIdentification> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
     
     try {
       const response = await fetch('/api/identify', {

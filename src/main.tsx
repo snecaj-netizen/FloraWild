@@ -11,6 +11,8 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
         console.log('SW registered: ', registration);
+        // Direct the browser to check for service worker updates immediately
+        registration.update().catch(err => console.debug('SW update failed', err));
       })
       .catch(registrationError => {
         console.log('SW registration failed: ', registrationError);

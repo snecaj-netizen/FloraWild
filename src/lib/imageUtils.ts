@@ -14,7 +14,6 @@ export async function compressImage(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.src = base64Str;
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let width = img.width;
@@ -49,5 +48,6 @@ export async function compressImage(
       resolve(compressedBase64);
     };
     img.onerror = (err) => reject(err);
+    img.src = base64Str;
   });
 }
