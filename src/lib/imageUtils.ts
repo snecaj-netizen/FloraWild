@@ -51,3 +51,60 @@ export async function compressImage(
     img.src = base64Str;
   });
 }
+
+/**
+ * Attempt to save a base64 image to the device's photo gallery or files.
+ * On mobile devices, uses the Web Share API to allow natural "Save Image" into the device's native photos app.
+ * Falls back to programmatic file download.
+ */
+export async function saveImageToGallery(base64Str: string, namePrefix: string = 'FloraWild'): Promise<boolean> {
+  const timestamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15);
+  const fileName = `${namePrefix}_${timestamp}.jpg`;
+  
+  try {
+    // Convert base64 to Blob
+    const response = await fetch(base64Str);
+    const blob = await response.blob();
+    
+    // Attempt Web Share API for native gallery saving (perfect for iOS/Android photos)
+    if (navigator.share && navigator.canShare) {
+      const file = new File([blob], fileName, { type: 'image/jpeg' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Salva Foto',
+          text: 'Salva questa foto sul tuo dispositivo o galleria!',
+        });
+        return true;
+      }
+    }
+    
+    // Fallback: Programmatic standard file download
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (error) {
+    console.error("[imageUtils] Errore nel salvataggio dell'immagine:", error);
+    
+    // Fallback: Simplest inline data URL trigger
+    try {
+      const link = document.createElement('a');
+      link.href = base64Str;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return true;
+    } catch (innerError) {
+      console.error("[imageUtils] Fallback di emergenza fallito:", innerError);
+      return false;
+    }
+  }
+}
+

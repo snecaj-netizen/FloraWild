@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, RefreshCw, X, Leaf, Flower, Apple, TreeDeciduous, Loader2, MapPin, Sprout } from 'lucide-react';
+import { Camera, Upload, RefreshCw, X, Leaf, Flower, Apple, TreeDeciduous, Loader2, MapPin, Sprout, Save, Download, Check, Info } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { saveImageToGallery } from '../lib/imageUtils';
 import EXIF from 'exif-js';
 
 interface CameraViewProps {
@@ -21,6 +22,10 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
   const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isFromFileUpload, setIsFromFileUpload] = useState(false);
+  const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
+  const [rememberChoice, setRememberChoice] = useState(false);
 
   const plantParts = [
     { 
@@ -185,6 +190,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const base64 = canvas.toDataURL('image/jpeg');
         setTempImage(base64);
+        setIsFromFileUpload(false); // Captured live
         stopCamera();
         if (!capturedLocation) requestLocation();
       }
@@ -196,6 +202,7 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
     if (file) {
       setCapturedLocation(undefined); // Reset location to ensure we ONLY use EXIF for uploads
       setIsGettingLocation(false);
+      setIsFromFileUpload(true); // From file upload, no need to save again!
       
       // Try to get EXIF
       try {
@@ -233,7 +240,52 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (!tempImage) return;
+
+    if (isFromFileUpload) {
+      // It's an existing upload, so it is already in their gallery. Just identify!
+      onCapture(tempImage, activeCategory, selectedPart, capturedLocation);
+      return;
+    }
+
+    // Live capture: inspect automatic-save preference
+    const savedPreference = localStorage.getItem('floraWild_autoSaveToGallery');
+    if (savedPreference === 'always') {
+      try {
+        await saveImageToGallery(tempImage);
+      } catch (err) {
+        console.error("Auto save image failed:", err);
+      }
+      onCapture(tempImage, activeCategory, selectedPart, capturedLocation);
+    } else if (savedPreference === 'never') {
+      onCapture(tempImage, activeCategory, selectedPart, capturedLocation);
+    } else {
+      // No preference or requested confirmation, show the beautiful dialog!
+      setShowSaveConfirmModal(true);
+    }
+  };
+
+  const handleSaveAndConfirm = async () => {
+    setShowSaveConfirmModal(false);
+    if (rememberChoice) {
+      localStorage.setItem('floraWild_autoSaveToGallery', 'always');
+    }
+    if (tempImage) {
+      try {
+        await saveImageToGallery(tempImage);
+      } catch (err) {
+        console.error("Save image failed:", err);
+      }
+      onCapture(tempImage, activeCategory, selectedPart, capturedLocation);
+    }
+  };
+
+  const handleOnlyConfirm = () => {
+    setShowSaveConfirmModal(false);
+    if (rememberChoice) {
+      localStorage.setItem('floraWild_autoSaveToGallery', 'never');
+    }
     if (tempImage) {
       onCapture(tempImage, activeCategory, selectedPart, capturedLocation);
     }
@@ -471,6 +523,64 @@ export function CameraView({ onCapture, onClose, initialImage }: CameraViewProps
         accept="image/*"
         className="hidden"
       />
+
+      {/* Salva Foto Confirmation Modal */}
+      {showSaveConfirmModal && (
+        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-6 shadow-2xl text-nature-900 border border-nature-100"
+          >
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-600">
+                <Save size={32} />
+              </div>
+              <h3 className="text-xl font-serif font-bold text-nature-900">Salvare lo scatto nel telefono?</h3>
+              <p className="text-sm text-nature-500">
+                Vuoi salvare una copia di questa foto live nella galleria delle immagini o nei file del tuo dispositivo per conservarla?
+              </p>
+            </div>
+
+            <div className="bg-nature-50 border border-nature-100 p-3 rounded-xl flex items-start gap-2.5 text-xs text-nature-600">
+              <Info size={16} className="text-brand-500 shrink-0 mt-0.5" />
+              <span>
+                Su smartphone, potrai salvare l'immagine direttamente tra le tue foto toccando <strong>"Salva immagine"</strong> nel menu di condivisione che comparirà.
+              </span>
+            </div>
+
+            {/* Checkbox for Remembering state */}
+            <button 
+              onClick={() => setRememberChoice(!rememberChoice)}
+              className="flex items-center gap-2 px-1 text-sm text-nature-600 select-none cursor-pointer w-full text-left"
+            >
+              <div className={cn(
+                "w-5 h-5 rounded border flex items-center justify-center transition-all",
+                rememberChoice ? "bg-brand-500 border-brand-500 text-white" : "border-nature-300 bg-white"
+              )}>
+                {rememberChoice && <Check size={14} />}
+              </div>
+              <span>Ricorda la mia scelta per i prossimi scatti</span>
+            </button>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={handleSaveAndConfirm}
+                className="w-full bg-brand-500 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-brand-600 transition-all active:scale-95 text-sm"
+              >
+                <Download size={18} />
+                Sì, salva e procedi
+              </button>
+              <button
+                onClick={handleOnlyConfirm}
+                className="w-full bg-nature-100 hover:bg-nature-200 text-nature-700 py-3 rounded-2xl font-semibold transition-all text-sm"
+              >
+                No, procedi soltanto
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight, WifiOff, RefreshCw, Trash2, AlertTriangle, Heart } from 'lucide-react';
+import { Camera, Search, Leaf, Sprout, BookOpen, Clock, ChevronRight, WifiOff, RefreshCw, Trash2, AlertTriangle, Heart, Settings } from 'lucide-react';
 import { SavedSearch, Plant, QueuedIdentification } from '../types';
 import { cn } from '../lib/utils';
 
@@ -32,6 +32,24 @@ export function Home({
 }: HomeProps) {
   const recentSearches = savedSearches.slice(0, 3);
   const displayPlants = recentPlants.slice(0, 3);
+
+  const [savePreference, setSavePreference] = React.useState<'ask' | 'always' | 'never'>('ask');
+
+  React.useEffect(() => {
+    const pref = localStorage.getItem('floraWild_autoSaveToGallery');
+    if (pref === 'always') setSavePreference('always');
+    else if (pref === 'never') setSavePreference('never');
+    else setSavePreference('ask');
+  }, []);
+
+  const handleSavePreferenceChange = (newPref: 'ask' | 'always' | 'never') => {
+    setSavePreference(newPref);
+    if (newPref === 'ask') {
+      localStorage.removeItem('floraWild_autoSaveToGallery');
+    } else {
+      localStorage.setItem('floraWild_autoSaveToGallery', newPref);
+    }
+  };
 
   return (
     <div className="space-y-10 pb-10">
@@ -258,6 +276,52 @@ export function Home({
         <p className="text-nature-600 text-sm leading-relaxed italic relative">
           "Molte piante selvatiche e funghi che incontriamo in natura hanno proprietà straordinarie o sapori unici. FloraWild ti aiuta a riscoprirli in sicurezza, distinguendo le specie preziose da quelle pericolose."
         </p>
+      </section>
+
+      {/* Impostazioni Foto Section */}
+      <section className="bg-nature-50 border border-nature-100 p-6 rounded-[2rem] space-y-4">
+        <h3 className="text-sm font-bold text-nature-400 uppercase tracking-widest flex items-center gap-2">
+          <Settings size={16} />
+          Impostazioni Foto
+        </h3>
+        <p className="text-xs text-nature-600 leading-relaxed">
+          Scegli se salvare automaticamente le foto scattate con la fotocamera direttamente nella galleria delle immagini del dispositivo.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => handleSavePreferenceChange('ask')}
+            className={cn(
+              "py-2 px-1 rounded-xl text-[11px] font-bold transition-all border text-center tracking-tight",
+              savePreference === 'ask' 
+                ? "bg-brand-500 text-white border-brand-500 shadow-sm"
+                : "bg-white text-nature-600 border-nature-200 hover:bg-nature-100"
+            )}
+          >
+            Chiedi sempre
+          </button>
+          <button
+            onClick={() => handleSavePreferenceChange('always')}
+            className={cn(
+              "py-2 px-1 rounded-xl text-[11px] font-bold transition-all border text-center tracking-tight",
+              savePreference === 'always' 
+                ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                : "bg-white text-nature-600 border-nature-200 hover:bg-nature-100"
+            )}
+          >
+            Salva sempre
+          </button>
+          <button
+            onClick={() => handleSavePreferenceChange('never')}
+            className={cn(
+              "py-2 px-1 rounded-xl text-[11px] font-bold transition-all border text-center tracking-tight",
+              savePreference === 'never' 
+                ? "bg-slate-700 text-white border-slate-700 shadow-sm"
+                : "bg-white text-nature-600 border-nature-200 hover:bg-nature-100"
+            )}
+          >
+            Non salvare
+          </button>
+        </div>
       </section>
     </div>
   );
