@@ -312,30 +312,30 @@ export function PlantDetails({ plant, imageUrl, onSave, onBack, onClose, onRedo,
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <div className={cn("flex-1 p-4 rounded-2xl flex items-center gap-3", plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")}>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className={cn("w-full sm:flex-1 p-4 rounded-2xl flex items-center gap-3", plant.isEdible ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")}>
           {plant.isEdible ? <Check size={24} /> : <AlertTriangle size={24} />}
           <div>
             <p className="text-xs font-bold uppercase tracking-wider">Commestibilità</p>
             <p className="font-medium text-sm leading-tight">{plant.isEdible ? 'Commestibile' : 'Non Commestibile'}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={generatePreview} disabled={isGenerating} className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all disabled:opacity-50">
+        <div className="flex gap-2 w-full sm:w-auto sm:self-center justify-between sm:justify-start">
+          <button onClick={generatePreview} disabled={isGenerating} className="flex-1 sm:flex-initial p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all disabled:opacity-50">
             {isGenerating ? <Loader2 className="animate-spin" size={24} /> : <Share2 size={24} />}
           </button>
           <button onClick={() => {
             navigator.clipboard.writeText(window.location.href);
             if (onShowMessage) onShowMessage("✅ Link copiato!");
-          }} className="p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all">
+          }} className="flex-1 sm:flex-initial p-4 rounded-2xl flex items-center justify-center bg-white border border-nature-200 text-nature-600 hover:bg-nature-50 transition-all">
             <Copy size={24} className="opacity-50" />
           </button>
-          <button onClick={onSave} disabled={isSaving || isSaved} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all", isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100")}>
+          <button onClick={onSave} disabled={isSaving || isSaved} className={cn("flex-1 sm:flex-initial p-4 rounded-2xl flex items-center justify-center transition-all", isSaved ? "bg-nature-600 text-white" : "bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-100")}>
             {isSaved ? <Check size={24} /> : <Save size={24} />}
           </button>
           <button 
              onClick={() => onToggleFavorite?.(plant.id)}
-             className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border border-nature-200", plant.isFavorite ? "bg-rose-50 border-rose-200" : "bg-white hover:bg-nature-50")}
+             className={cn("flex-1 sm:flex-initial p-4 rounded-2xl flex items-center justify-center transition-all border border-nature-200", plant.isFavorite ? "bg-rose-50 border-rose-200" : "bg-white hover:bg-nature-50")}
           >
              <Heart size={24} className={cn(plant.isFavorite ? "text-rose-500 fill-rose-500" : "text-nature-400")} />
           </button>

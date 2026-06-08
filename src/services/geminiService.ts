@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { PlantIdentification } from "../types";
 
 export async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1500): Promise<T> {
@@ -203,6 +203,9 @@ export async function identifyPlant(
           config: {
             responseMimeType: "application/json",
             responseSchema,
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.MINIMAL
+            }
           },
         });
         
@@ -228,6 +231,9 @@ export async function identifyPlant(
             config: {
               responseMimeType: "application/json",
               responseSchema,
+              thinkingConfig: {
+                thinkingLevel: ThinkingLevel.MINIMAL
+              }
             },
           });
           
@@ -296,6 +302,11 @@ export async function searchPlant(
         response = await ai.models.generateContent({
           model: activeModel,
           contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.MINIMAL
+            }
+          }
         });
       } catch (error: any) {
         const errorStr = (error?.message || String(error)).toUpperCase();
@@ -313,6 +324,11 @@ export async function searchPlant(
           response = await ai.models.generateContent({
             model: activeModel,
             contents: [{ role: "user", parts: [{ text: prompt }] }],
+            config: {
+              thinkingConfig: {
+                thinkingLevel: ThinkingLevel.MINIMAL
+              }
+            }
           });
         } else {
           throw error;
